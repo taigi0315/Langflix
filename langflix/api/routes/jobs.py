@@ -395,8 +395,12 @@ async def process_video_task(
 
 @router.post("/jobs")
 async def create_job(
-    video_file: UploadFile = File(...),
+    video_file: Optional[UploadFile] = File(None),
     subtitle_file: Optional[UploadFile] = File(None),  # Optional - discovers from Subs/ folder
+    # Shared-volume path shortcuts (used when Flask UI and API share /data mount)
+    # Avoids uploading large files over HTTP when both containers see the same filesystem
+    video_path_on_disk: Optional[str] = Form(None),
+    subtitle_path_on_disk: Optional[str] = Form(None),
     language_code: str = Form(...),
     show_name: str = Form(...),
     episode_name: str = Form(...),
@@ -436,65 +440,76 @@ async def create_job(
 
         # RAW PAYLOAD LOGGING (as requested)
         logger.info(f"🚀 JOB CREATION RAW PAYLOAD:")
-        logger.info(f"   video_file: {video_file.filename}")
+        logger.info(f"   video_path_on_disk: {video_path_on_disk or '(upload mode)'}")
         logger.info(f"   language_code (primary): {language_code}")
         logger.info(f"   target_duration used: {target_duration}s")
         logger.info(f"   display_language: {language_code} (Mapped: {LANGUAGE_CODE_MAP.get(language_code, 'Unknown')})")
         logger.info(f"   source_language (explicit): {source_language}")
         logger.info(f"   target_languages (raw): '{target_languages}'")
         
-        # Validate file types
-        if not video_file.filename or not video_file.filename.lower().endswith(('.mp4', '.mkv', '.avi')):
-            raise HTTPException(status_code=400, detail="Invalid video file type")
-
-        # Validate subtitle file - REQUIRED for processing
-        # Note: Auto-discovery from Subs/ folder only works if video is already in assets/media
-        # With new pipeline logic, we allow missing subtitle to trigger fallback generation
-        if subtitle_file is None:
-             logger.info("No subtitle file provided in upload. Will attempt pipeline auto-discovery/generation.")
-        elif not subtitle_file.filename:
-             logger.info("Empty subtitle file object provided. Will attempt pipeline auto-discovery/generation.")
-        else:
-            supported_subtitle_extensions = ('.srt', '.vtt', '.smi', '.ass', '.ssa')
-            if not subtitle_file.filename.lower().endswith(supported_subtitle_extensions):
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid subtitle file type. Supported formats: {', '.join(supported_subtitle_extensions)}"
-                )
-        
-        # Check file sizes (optional validation)
         # Generate job ID first for temp file naming
         job_id = str(uuid.uuid4())
-        
-        # Get temp file manager
         temp_manager = get_temp_manager()
-        
-        video_ext = Path(video_file.filename).suffix or '.mkv'
-        
-        # Stream video file to disk (MEMORY OPTIMIZATION: Do not use read())
-        logger.info(f"Streaming upload to disk for job {job_id}")
-        
-        video_temp_path = temp_manager.create_persistent_temp_file(suffix=video_ext, prefix=f'{job_id}_video_')
-        with open(video_temp_path, 'wb') as buffer:
-            shutil.copyfileobj(video_file.file, buffer)
-        
-        video_size = video_temp_path.stat().st_size
-        if video_size == 0:
-            raise HTTPException(status_code=400, detail="Empty video file uploaded")
-        
-        # Handle subtitle file (optional - auto-discovers from Subs/ folder)
-        subtitle_temp_path = None
-        if subtitle_file and subtitle_file.filename:
-            subtitle_ext = Path(subtitle_file.filename).suffix or '.srt'
-            subtitle_temp_path = temp_manager.create_persistent_temp_file(suffix=subtitle_ext, prefix=f'{job_id}_subtitle_')
-            with open(subtitle_temp_path, 'wb') as buffer:
-                shutil.copyfileobj(subtitle_file.file, buffer)
-            
-            # Check size only if file was provided and written
-            if subtitle_temp_path.exists():
-                subtitle_size = subtitle_temp_path.stat().st_size
-                if subtitle_size == 0:
-                     logger.warning("Uploaded subtitle file is empty.")
+
+        # --- PATH MODE: both containers share /data volume, no upload needed ---
+        if video_path_on_disk:
+            video_path_on_disk = video_path_on_disk.strip()
+            if not Path(video_path_on_disk).exists():
+                raise HTTPException(status_code=400, detail=f"video_path_on_disk not found: {video_path_on_disk}")
+            if not video_path_on_disk.lower().endswith(('.mp4', '.mkv', '.avi')):
+                raise HTTPException(status_code=400, detail="Invalid video file type")
+
+            video_temp_path = Path(video_path_on_disk)  # use in-place, no copy
+            video_size = video_temp_path.stat().st_size
+            video_filename = video_temp_path.name
+            logger.info(f"Using on-disk video path (no upload): {video_temp_path}")
+
+            subtitle_temp_path = None
+            if subtitle_path_on_disk and Path(subtitle_path_on_disk).exists():
+                subtitle_temp_path = Path(subtitle_path_on_disk)
+                logger.info(f"Using on-disk subtitle path: {subtitle_temp_path}")
+            else:
+                logger.info("No subtitle path provided — will auto-discover from Subs/ folder")
+
+        # --- UPLOAD MODE: traditional file upload ---
+        else:
+            if not video_file or not video_file.filename:
+                raise HTTPException(status_code=400, detail="Either video_file or video_path_on_disk is required")
+            if not video_file.filename.lower().endswith(('.mp4', '.mkv', '.avi')):
+                raise HTTPException(status_code=400, detail="Invalid video file type")
+
+            if subtitle_file is None:
+                logger.info("No subtitle file provided in upload. Will attempt pipeline auto-discovery/generation.")
+            elif not subtitle_file.filename:
+                logger.info("Empty subtitle file object provided. Will attempt pipeline auto-discovery/generation.")
+            else:
+                supported_subtitle_extensions = ('.srt', '.vtt', '.smi', '.ass', '.ssa')
+                if not subtitle_file.filename.lower().endswith(supported_subtitle_extensions):
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invalid subtitle file type. Supported formats: {', '.join(supported_subtitle_extensions)}"
+                    )
+
+            video_filename = video_file.filename
+            video_ext = Path(video_file.filename).suffix or '.mkv'
+
+            logger.info(f"Streaming upload to disk for job {job_id}")
+            video_temp_path = temp_manager.create_persistent_temp_file(suffix=video_ext, prefix=f'{job_id}_video_')
+            with open(video_temp_path, 'wb') as buffer:
+                shutil.copyfileobj(video_file.file, buffer)
+
+            video_size = video_temp_path.stat().st_size
+            if video_size == 0:
+                raise HTTPException(status_code=400, detail="Empty video file uploaded")
+
+            subtitle_temp_path = None
+            if subtitle_file and subtitle_file.filename:
+                subtitle_ext = Path(subtitle_file.filename).suffix or '.srt'
+                subtitle_temp_path = temp_manager.create_persistent_temp_file(suffix=subtitle_ext, prefix=f'{job_id}_subtitle_')
+                with open(subtitle_temp_path, 'wb') as buffer:
+                    shutil.copyfileobj(subtitle_file.file, buffer)
+                if subtitle_temp_path.exists() and subtitle_temp_path.stat().st_size == 0:
+                    logger.warning("Uploaded subtitle file is empty.")
         
         # Get Redis job manager
         redis_manager = get_redis_job_manager()
@@ -522,8 +537,8 @@ async def create_job(
         job_data = {
             "job_id": job_id,
             "status": "PENDING",
-            "video_file": video_file.filename,
-            "subtitle_file": subtitle_file.filename if subtitle_file and subtitle_file.filename else "",
+            "video_file": video_filename,
+            "subtitle_file": subtitle_temp_path.name if subtitle_temp_path else "",
             "video_size": str(video_size),
             "subtitle_size": str(subtitle_temp_path.stat().st_size if subtitle_temp_path else 0),
             "language_code": language_code,
@@ -553,8 +568,8 @@ async def create_job(
             job_id=job_id,
             video_path=str(video_temp_path),
             subtitle_path=str(subtitle_temp_path) if subtitle_temp_path else "",
-            video_filename=video_file.filename,
-            subtitle_filename=subtitle_file.filename if subtitle_file and subtitle_file.filename else "",
+            video_filename=video_filename,
+            subtitle_filename=subtitle_temp_path.name if subtitle_temp_path else "",
             language_code=language_code,
             source_language=source_language,
             show_name=show_name,
