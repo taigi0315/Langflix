@@ -2534,8 +2534,8 @@ class VideoManagementUI:
         @self.app.route('/api/files/upload', methods=['POST'])
         def upload_media_files():
             """Upload video and/or subtitle files matching the expected structure:
-            /output/ShowName/ShowName.S01E01.mp4
-            /output/ShowName/Subs/ShowName.S01E01/5_English.srt
+            /assets/media/ShowName/ShowName.S01E01.mp4
+            /assets/media/ShowName/Subs/ShowName.S01E01/5_English.srt
             """
             try:
                 show_name = request.form.get('show_name', '').strip()
@@ -2544,7 +2544,8 @@ class VideoManagementUI:
                 if not show_name:
                     return jsonify({"error": "Show name is required"}), 400
 
-                show_dir = Path(self.output_dir) / show_name
+                # Source media goes to media_dir, NOT output_dir
+                show_dir = Path(self.media_dir) / show_name
                 show_dir.mkdir(parents=True, exist_ok=True)
 
                 uploaded = []
