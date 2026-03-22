@@ -4,13 +4,18 @@ services:
   langflix-ec2:
     build:
       context: ..
-      dockerfile: Dockerfile.ec2
+      dockerfile: deploy/Dockerfile.ec2
     container_name: langflix-ec2-app
     environment:
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - LANGFLIX_LOG_LEVEL=INFO
       - LANGFLIX_OUTPUT_DIR=/data/output
+      - HOST=0.0.0.0
+      - PORT=8000
+    ports:
+      - "8000:8000"
+    command: python -m langflix.api.main
     volumes:
       # EBS volume mount (from host)
       - /data:/data
