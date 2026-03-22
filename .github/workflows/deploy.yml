@@ -1,0 +1,39 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          timeout: 300s
+          script: |
+            cd /home/ec2-user/Langflix
+
+            echo "Pulling latest code..."
+            git pull origin main
+
+            echo "Writing .env file..."
+            cat > .env << 'ENVEOF'
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            GEMINI_MODEL=gemini-2.5-flash
+            LANGFLIX_OUTPUT_DIR=/data/output
+            LANGFLIX_LOG_DIR=/data/logs
+            LANGFLIX_LOG_LEVEL=INFO
+            ENVEOF
+
+            echo "Building and restarting containers..."
+            cd deploy
+            docker compose -f docker-compose.ec2.yml down
+            docker compose -f docker-compose.ec2.yml up --build -d
+
+            echo "Deployment complete!"
+            docker compose -f docker-compose.ec2.yml ps
