@@ -398,9 +398,20 @@ class YouTubeUploader:
         
         # Store state for verification (expires in 10 minutes)
         self._store_oauth_state(state, expiration_seconds=600)
-        
+
+        # Persist PKCE code_verifier so the callback can restore it.
+        # google-auth-oauthlib may generate a code_verifier and embed code_challenge
+        # in the authorization URL; the callback needs the same verifier to exchange
+        # the code, but it creates a fresh Flow object and would otherwise lose it.
+        if not hasattr(self, '_code_verifiers'):
+            self._code_verifiers = {}
+        code_verifier = getattr(flow, 'code_verifier', None)
+        if code_verifier:
+            self._code_verifiers[state] = code_verifier
+            logger.debug(f"Stored PKCE code_verifier for state {state[:20]}...")
+
         logger.info(f"Generated OAuth URL for web flow (email hint: {email is not None})")
-        
+
         return {
             'url': authorization_url,
             'state': state
@@ -473,7 +484,15 @@ class YouTubeUploader:
             SCOPES,
             redirect_uri=redirect_uri
         )
-        
+
+        # Restore PKCE code_verifier if one was generated during authorization.
+        # Without this the token exchange fails with "Missing code verifier".
+        if hasattr(self, '_code_verifiers'):
+            code_verifier = self._code_verifiers.pop(state, None)
+            if code_verifier:
+                flow.code_verifier = code_verifier
+                logger.debug("Restored PKCE code_verifier for token exchange")
+
         # Exchange code for credentials
         flow.fetch_token(code=authorization_code)
         creds = flow.credentials
