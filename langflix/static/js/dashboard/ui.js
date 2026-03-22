@@ -531,7 +531,8 @@ export const ui = {
         let mediaHTML = '<div class="loading">Loading available media...</div>';
         try {
             const response = await fetch('/api/media/scan');
-            const mediaFiles = await response.json();
+            const data = await response.json();
+            const mediaFiles = Array.isArray(data) ? data : [];
 
             if (mediaFiles.length === 0) {
                 mediaHTML = '<p style="color: #e74c3c;">No media files found. Please add video files to your media directory.</p>';
