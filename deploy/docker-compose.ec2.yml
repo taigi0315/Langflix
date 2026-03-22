@@ -1,6 +1,7 @@
 
 services:
-  langflix-ec2:
+  # FastAPI Backend
+  langflix-api:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.ec2
@@ -16,20 +17,45 @@ services:
       - "8000:8000"
     command: python -m langflix.api.main
     volumes:
-      # EBS volume mount (from host)
       - /data:/data
-      # Application config
       - ../config/config.yaml:/app/config/config.yaml:ro
       - ../.env:/app/.env:ro
     restart: unless-stopped
     deploy:
       resources:
         limits:
-          memory: 3G
-          cpus: '2'
-    # Health check
+          memory: 2G
+          cpus: '1'
     healthcheck:
-      test: [ "CMD", "python", "-c", "import langflix" ]
+      test: ["CMD", "python", "-c", "import langflix"]
       interval: 30s
       timeout: 10s
       retries: 3
+
+  # Flask Web Dashboard
+  langflix-ui:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.ec2
+    container_name: langflix-ec2-ui
+    environment:
+      - LANGFLIX_API_BASE_URL=http://langflix-api:8000
+      - LANGFLIX_UI_PORT=5000
+      - LANGFLIX_LOG_LEVEL=INFO
+      - LANGFLIX_OUTPUT_DIR=/data/output
+    ports:
+      - "5000:5000"
+    command: python -m langflix.youtube.web_ui
+    volumes:
+      - /data:/data
+      - ../config/config.yaml:/app/config/config.yaml:ro
+      - ../.env:/app/.env:ro
+      - /data/auth:/app/auth
+    depends_on:
+      - langflix-api
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1'
