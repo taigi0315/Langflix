@@ -959,8 +959,14 @@ class VideoManagementUI:
                 ), 400
             
             try:
-                redirect_uri = f"http://localhost:{self.port}/api/youtube/auth/callback"
-                
+                # Build redirect_uri from the actual request host so it matches
+                # what was used when generating the authorization URL.
+                # This supports custom domains (e.g. langflix.duckdns.org) and
+                # avoids the hardcoded localhost that breaks server-side OAuth.
+                scheme = request.scheme
+                host = request.host
+                redirect_uri = f"{scheme}://{host}/api/youtube/auth/callback"
+
                 success = self.upload_manager.uploader.authenticate_from_callback(
                     authorization_code=authorization_code,
                     state=state,
