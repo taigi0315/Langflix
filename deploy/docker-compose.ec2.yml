@@ -26,8 +26,8 @@ services:
     deploy:
       resources:
         limits:
-          memory: 8G
-          cpus: '4'
+          memory: 3G
+          cpus: '2'
     # Health check
     healthcheck:
       test: [ "CMD", "python", "-c", "import langflix" ]
