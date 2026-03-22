@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib.parse import unquote
 from typing import List, Dict, Any
 from datetime import datetime
+from werkzeug.utils import secure_filename
 from flask import Flask, render_template, jsonify, request, send_file, render_template_string
 from langflix.youtube.video_manager import VideoFileManager, VideoMetadata
 from langflix.youtube.uploader import YouTubeUploader, YouTubeUploadResult, YouTubeUploadManager
@@ -2530,6 +2531,78 @@ class VideoManagementUI:
                 logger.error(f"Error cancelling job: {e}")
                 return jsonify({"error": str(e)}), 500
     
+        @self.app.route('/api/files/upload', methods=['POST'])
+        def upload_media_files():
+            """Upload video and/or subtitle files to the output directory"""
+            try:
+                show_name = request.form.get('show_name', '').strip()
+                season = request.form.get('season', 'S01').strip()
+                episode = request.form.get('episode', 'E01').strip()
+
+                if not show_name:
+                    return jsonify({"error": "Show name is required"}), 400
+
+                if not season.upper().startswith('S'):
+                    season = f"S{season.zfill(2)}"
+                if not episode.upper().startswith('E'):
+                    episode = f"E{episode.zfill(2)}"
+
+                season = season.upper()
+                episode = episode.upper()
+
+                # Create directory: /data/output/ShowName/S01/
+                target_dir = Path(self.output_dir) / show_name / season
+                target_dir.mkdir(parents=True, exist_ok=True)
+
+                base_name = f"{show_name}.{season}{episode}"
+                uploaded = []
+
+                if 'video' in request.files and request.files['video'].filename:
+                    video_file = request.files['video']
+                    ext = Path(secure_filename(video_file.filename)).suffix.lower()
+                    video_path = target_dir / f"{base_name}{ext}"
+                    video_file.save(str(video_path))
+                    uploaded.append(f"Video: {video_path.name}")
+
+                if 'subtitle' in request.files and request.files['subtitle'].filename:
+                    sub_file = request.files['subtitle']
+                    ext = Path(secure_filename(sub_file.filename)).suffix.lower()
+                    sub_path = target_dir / f"{base_name}{ext}"
+                    sub_file.save(str(sub_path))
+                    uploaded.append(f"Subtitle: {sub_path.name}")
+
+                if not uploaded:
+                    return jsonify({"error": "No files provided"}), 400
+
+                return jsonify({
+                    "success": True,
+                    "directory": str(target_dir),
+                    "files": uploaded,
+                    "message": f"Uploaded to {show_name}/{season}/"
+                })
+
+            except Exception as e:
+                logger.error(f"Error uploading files: {e}")
+                return jsonify({"error": str(e)}), 500
+
+        @self.app.route('/api/files/list')
+        def list_media_files():
+            """List raw media files in the output directory"""
+            try:
+                base = Path(self.output_dir)
+                result = []
+                for f in sorted(base.rglob('*')):
+                    if f.is_file() and f.suffix.lower() in ['.mp4', '.mkv', '.avi', '.srt', '.vtt', '.ass']:
+                        result.append({
+                            "path": str(f.relative_to(base)),
+                            "name": f.name,
+                            "size_mb": round(f.stat().st_size / 1024 / 1024, 1),
+                            "type": "subtitle" if f.suffix.lower() in ['.srt', '.vtt', '.ass'] else "video"
+                        })
+                return jsonify(result)
+            except Exception as e:
+                return jsonify({"error": str(e)}), 500
+
     def _build_api_url(self, path: str) -> str:
         """Construct API URL using configured base."""
         if not path.startswith('/'):

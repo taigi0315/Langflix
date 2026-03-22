@@ -92,6 +92,108 @@
         />
       </div>
 
+      <!-- File Upload Section -->
+      <div id="uploadSection" style="margin: 20px 0; background: #1e2a3a; border-radius: 12px; overflow: hidden;">
+        <div style="padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; border-bottom: 1px solid #2d3748;" onclick="toggleUploadPanel()">
+          <span style="font-weight: 600; color: #e2e8f0; font-size: 15px;">📁 Upload Media Files</span>
+          <span id="uploadToggleIcon" style="color: #a0aec0; font-size: 12px;">▼ Expand</span>
+        </div>
+        <div id="uploadPanel" style="display: none; padding: 20px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+            <div>
+              <label style="color: #a0aec0; font-size: 12px; display: block; margin-bottom: 6px;">Show Name *</label>
+              <input id="uploadShowName" type="text" placeholder="e.g. Suits" style="width: 100%; padding: 8px 12px; background: #2d3748; border: 1px solid #4a5568; border-radius: 6px; color: #e2e8f0; font-size: 14px; box-sizing: border-box;" />
+            </div>
+            <div>
+              <label style="color: #a0aec0; font-size: 12px; display: block; margin-bottom: 6px;">Season</label>
+              <input id="uploadSeason" type="text" placeholder="e.g. S01" value="S01" style="width: 100%; padding: 8px 12px; background: #2d3748; border: 1px solid #4a5568; border-radius: 6px; color: #e2e8f0; font-size: 14px; box-sizing: border-box;" />
+            </div>
+            <div>
+              <label style="color: #a0aec0; font-size: 12px; display: block; margin-bottom: 6px;">Episode</label>
+              <input id="uploadEpisode" type="text" placeholder="e.g. E01" value="E01" style="width: 100%; padding: 8px 12px; background: #2d3748; border: 1px solid #4a5568; border-radius: 6px; color: #e2e8f0; font-size: 14px; box-sizing: border-box;" />
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+            <div id="videoDropZone" ondragover="event.preventDefault(); this.style.borderColor='#6c63ff'" ondragleave="this.style.borderColor='#4a5568'" ondrop="handleFileDrop(event, 'video')"
+              style="border: 2px dashed #4a5568; border-radius: 8px; padding: 24px; text-align: center; cursor: pointer; transition: border-color 0.2s;" onclick="document.getElementById('videoFileInput').click()">
+              <div style="font-size: 28px; margin-bottom: 8px;">🎬</div>
+              <div style="color: #a0aec0; font-size: 13px;" id="videoDropLabel">Drop video file here<br><span style="color: #6c63ff;">.mp4 .mkv .avi</span></div>
+              <input id="videoFileInput" type="file" accept=".mp4,.mkv,.avi" style="display:none" onchange="updateDropLabel(this, 'videoDropLabel')" />
+            </div>
+            <div id="subtitleDropZone" ondragover="event.preventDefault(); this.style.borderColor='#6c63ff'" ondragleave="this.style.borderColor='#4a5568'" ondrop="handleFileDrop(event, 'subtitle')"
+              style="border: 2px dashed #4a5568; border-radius: 8px; padding: 24px; text-align: center; cursor: pointer; transition: border-color 0.2s;" onclick="document.getElementById('subtitleFileInput').click()">
+              <div style="font-size: 28px; margin-bottom: 8px;">📝</div>
+              <div style="color: #a0aec0; font-size: 13px;" id="subtitleDropLabel">Drop subtitle file here<br><span style="color: #6c63ff;">.srt .vtt .ass</span></div>
+              <input id="subtitleFileInput" type="file" accept=".srt,.vtt,.ass" style="display:none" onchange="updateDropLabel(this, 'subtitleDropLabel')" />
+            </div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <div id="uploadStatus" style="color: #a0aec0; font-size: 13px;"></div>
+            <button onclick="uploadFiles()" style="background: linear-gradient(135deg, #6c63ff, #a855f7); color: white; border: none; padding: 10px 24px; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">
+              ⬆️ Upload Files
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <script>
+        function toggleUploadPanel() {
+          const panel = document.getElementById('uploadPanel');
+          const icon = document.getElementById('uploadToggleIcon');
+          const open = panel.style.display === 'none';
+          panel.style.display = open ? 'block' : 'none';
+          icon.textContent = open ? '▲ Collapse' : '▼ Expand';
+        }
+        function updateDropLabel(input, labelId) {
+          const label = document.getElementById(labelId);
+          if (input.files[0]) {
+            label.innerHTML = `✅ <strong style="color:#e2e8f0">${input.files[0].name}</strong><br><span style="color:#6c63ff;font-size:11px">${(input.files[0].size/1024/1024).toFixed(1)} MB</span>`;
+          }
+        }
+        function handleFileDrop(e, type) {
+          e.preventDefault();
+          const input = document.getElementById(type + 'FileInput');
+          const label = type + 'DropLabel';
+          const dt = new DataTransfer();
+          dt.items.add(e.dataTransfer.files[0]);
+          input.files = dt.files;
+          updateDropLabel(input, label);
+          document.getElementById(type + 'DropZone').style.borderColor = '#4a5568';
+        }
+        async function uploadFiles() {
+          const showName = document.getElementById('uploadShowName').value.trim();
+          const season = document.getElementById('uploadSeason').value.trim();
+          const episode = document.getElementById('uploadEpisode').value.trim();
+          const videoFile = document.getElementById('videoFileInput').files[0];
+          const subtitleFile = document.getElementById('subtitleFileInput').files[0];
+          const status = document.getElementById('uploadStatus');
+
+          if (!showName) { status.textContent = '⚠️ Show name is required'; status.style.color = '#e74c3c'; return; }
+          if (!videoFile && !subtitleFile) { status.textContent = '⚠️ Please select at least one file'; status.style.color = '#e74c3c'; return; }
+
+          status.textContent = '⏳ Uploading...'; status.style.color = '#a0aec0';
+          const formData = new FormData();
+          formData.append('show_name', showName);
+          formData.append('season', season);
+          formData.append('episode', episode);
+          if (videoFile) formData.append('video', videoFile);
+          if (subtitleFile) formData.append('subtitle', subtitleFile);
+
+          try {
+            const res = await fetch('/api/files/upload', { method: 'POST', body: formData });
+            const data = await res.json();
+            if (data.success) {
+              status.textContent = `✅ ${data.message} — ${data.files.join(', ')}`;
+              status.style.color = '#48bb78';
+            } else {
+              status.textContent = `❌ ${data.error}`; status.style.color = '#e74c3c';
+            }
+          } catch (err) {
+            status.textContent = `❌ Upload failed: ${err.message}`; status.style.color = '#e74c3c';
+          }
+        }
+      </script>
+
       <!-- Bulk Actions Bar -->
       <div
         id="bulkActionsBar"
