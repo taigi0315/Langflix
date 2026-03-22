@@ -12,7 +12,7 @@ def test_verify_logging_viral_title(caplog):
     renderer = OverlayRenderer(source_language_code="ko", target_language_code="es")
     mock_stream = MagicMock()
     mock_settings = MagicMock()
-    mock_settings.get_viral_title_chars_per_line.return_value = 20
+    mock_settings.get_viral_title_max_width_px.return_value = 1080
     mock_settings.get_viral_title_display_duration.return_value = 5.0
     
     # Configure mock ffmpeg to return mock_stream when filtered
@@ -32,7 +32,7 @@ def test_verify_logging_narrations(caplog):
     # Mock settings required by narrations
     mock_settings.get_narrations_type_color.return_value = "white"
     mock_settings.get_narrations_duration.return_value = 5.0
-    mock_settings.get_narrations_chars_per_line.return_value = 30
+    mock_settings.get_narrations_max_width_px.return_value = 1080
     
     mock_ffmpeg_module.filter.return_value = mock_stream
     

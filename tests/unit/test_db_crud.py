@@ -46,7 +46,7 @@ def test_media_crud_get_by_id(db_session):
         language_code="en"
     )
     
-    retrieved_media = MediaCRUD.get_by_id(db_session, str(media.id))
+    retrieved_media = MediaCRUD.get_by_id(db_session, media.id)
     assert retrieved_media is not None
     assert retrieved_media.show_name == "Test Show"
 
@@ -77,7 +77,7 @@ def test_media_crud_update_file_paths(db_session):
     
     updated_media = MediaCRUD.update_file_paths(
         db=db_session,
-        media_id=str(media.id),
+        media_id=media.id,
         subtitle_path="/new/subtitle.srt",
         video_path="/new/video.mp4"
     )
@@ -99,7 +99,7 @@ def test_expression_crud_create(db_session):
     
     expression = ExpressionCRUD.create(
         db=db_session,
-        media_id=str(media.id),
+        media_id=media.id,
         expression="test expression",
         expression_translation="테스트 표현",
         similar_expressions=["similar1", "similar2"]
@@ -123,16 +123,16 @@ def test_expression_crud_get_by_media(db_session):
     
     ExpressionCRUD.create(
         db=db_session,
-        media_id=str(media.id),
+        media_id=media.id,
         expression="expression 1"
     )
     ExpressionCRUD.create(
         db=db_session,
-        media_id=str(media.id),
+        media_id=media.id,
         expression="expression 2"
     )
     
-    expressions = ExpressionCRUD.get_by_media(db_session, str(media.id))
+    expressions = ExpressionCRUD.get_by_media(db_session, media.id)
     assert len(expressions) == 2
     assert expressions[0].expression == "expression 1"
     assert expressions[1].expression == "expression 2"
@@ -150,12 +150,12 @@ def test_expression_crud_search_by_text(db_session):
     
     ExpressionCRUD.create(
         db=db_session,
-        media_id=str(media.id),
+        media_id=media.id,
         expression="hello world"
     )
     ExpressionCRUD.create(
         db=db_session,
-        media_id=str(media.id),
+        media_id=media.id,
         expression="goodbye world"
     )
     
@@ -181,7 +181,7 @@ def test_processing_job_crud_create(db_session):
     
     job = ProcessingJobCRUD.create(
         db=db_session,
-        media_id=str(media.id)
+        media_id=media.id
     )
     
     assert job.id is not None
@@ -202,13 +202,13 @@ def test_processing_job_crud_update_status(db_session):
     
     job = ProcessingJobCRUD.create(
         db=db_session,
-        media_id=str(media.id)
+        media_id=media.id
     )
     
     # Update status
     updated_job = ProcessingJobCRUD.update_status(
         db=db_session,
-        job_id=str(job.id),
+        job_id=job.id,
         status="PROCESSING",
         progress=50
     )
@@ -220,12 +220,12 @@ def test_processing_job_crud_update_status(db_session):
     # Complete job
     ProcessingJobCRUD.update_status(
         db=db_session,
-        job_id=str(job.id),
+        job_id=job.id,
         status="COMPLETED",
         progress=100
     )
     
-    completed_job = ProcessingJobCRUD.get_by_id(db_session, str(job.id))
+    completed_job = ProcessingJobCRUD.get_by_id(db_session, job.id)
     assert completed_job.status == "COMPLETED"
     assert completed_job.progress == 100
 
@@ -240,13 +240,13 @@ def test_processing_job_crud_get_by_status(db_session):
         language_code="en"
     )
     
-    job1 = ProcessingJobCRUD.create(db=db_session, media_id=str(media.id))
-    job2 = ProcessingJobCRUD.create(db=db_session, media_id=str(media.id))
+    job1 = ProcessingJobCRUD.create(db=db_session, media_id=media.id)
+    job2 = ProcessingJobCRUD.create(db=db_session, media_id=media.id)
     
     # Update one job to PROCESSING
     ProcessingJobCRUD.update_status(
         db=db_session,
-        job_id=str(job1.id),
+        job_id=job1.id,
         status="PROCESSING"
     )
     

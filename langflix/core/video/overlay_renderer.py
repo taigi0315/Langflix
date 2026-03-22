@@ -21,6 +21,7 @@ from typing import List, Dict, Any, Optional, Tuple
 
 from langflix.core.video.font_resolver import FontResolver
 from langflix import settings
+from langflix.core.video.text_utils import wrap_text_to_pixel_width
 
 logger = logging.getLogger(__name__)
 
@@ -120,20 +121,23 @@ class OverlayRenderer:
         viral_border_color = settings.get_viral_title_border_color()
         viral_duration = settings.get_viral_title_display_duration() if duration == 0 else duration
 
-        # Wrap title using configurable chars per line
-        title_chars_per_line = settings.get_viral_title_chars_per_line()
+        # Get TARGET language font for title (title is in user's native language)
+        target_font = self.font_resolver.get_target_font("title")
         
-        # Use configured chars per line directly without implicit scaling
-        # This allows precise control via config.yaml, regardless of language
-        logger.info(f"Using title chars per line: {title_chars_per_line} for language '{self.target_language_code}'")
+        max_title_width = settings.get_viral_title_max_width_px()
+        
+        logger.info(f"Using title dynamic width: {max_title_width}px for language '{self.target_language_code}'")
+
+        # Get TARGET language font for title (title is in user's native language)
+        target_font = self.font_resolver.get_target_font("title")
 
         # Respect existing newlines while wrapping
-        # textwrap.fill replaces newlines with spaces by default, so we split first
         input_lines = viral_title.split('\n')
         wrapped_lines = []
         for line in input_lines:
             if line.strip():
-                wrapped = textwrap.fill(line, width=title_chars_per_line)
+                # Dynamically calculate wrapping using PIL metrics
+                wrapped = wrap_text_to_pixel_width(line, target_font, viral_font_size, max_title_width)
                 wrapped_lines.append(wrapped)
         
         wrapped_viral_title = "\n".join(wrapped_lines)
@@ -158,11 +162,9 @@ class OverlayRenderer:
             }
 
             # Add timing if duration is specified (0 = entire video)
-            if viral_duration > 0:
-                viral_title_args['enable'] = f"between(t,0,{viral_duration:.2f})"
+            if float(viral_duration) > 0.0:
+                viral_title_args['enable'] = f"between(t,0,{float(viral_duration):.2f})"
 
-            # Use TARGET language font for title (title is in user's native language)
-            target_font = self.font_resolver.get_target_font("title")
             if target_font and os.path.exists(target_font):
                 viral_title_args['fontfile'] = target_font
 
@@ -219,18 +221,19 @@ class OverlayRenderer:
         # Get target language font for keywords
         keyword_font = self.font_resolver.get_target_font("keywords")
 
-        # Character width estimate for line wrapping calculation
-        char_width_estimate = font_size * 0.6
+        from langflix.core.video.text_utils import get_text_pixel_width
         comma_separator = ", "
 
-        # Build lines with comma-separated keywords, wrapping when needed
+        # Build lines with comma-separated keywords, wrapping when needed dynamically
         lines = []
         current_line = []
         current_line_width = 0
 
+        space_sep_width = get_text_pixel_width(comma_separator, keyword_font, font_size)
+
         for keyword in formatted_keywords:
-            keyword_width = len(keyword) * char_width_estimate
-            separator_width = len(comma_separator) * char_width_estimate if current_line else 0
+            keyword_width = get_text_pixel_width(keyword, keyword_font, font_size)
+            separator_width = space_sep_width if current_line else 0
             
             # Check if adding this keyword would exceed max width
             if current_line and (current_line_width + separator_width + keyword_width > max_width):
@@ -351,24 +354,25 @@ class OverlayRenderer:
             if not narr_text:
                 continue
 
-            # Wrap narration text to configured chars per line
-            narr_chars_per_line = settings.get_narrations_chars_per_line()
-            narr_text_wrapped = textwrap.fill(narr_text, width=narr_chars_per_line)
+            # Dynamically wrap narration text using true pixel widths
+            max_narr_width = settings.get_narrations_max_width_px()
+            narr_text_wrapped = wrap_text_to_pixel_width(narr_text, target_font, narr_font_size, max_narr_width)
 
             # Get color based on narration type
             narr_color = settings.get_narrations_type_color(narr_type)
 
             # Timing Logic
             if dialogue_index is not None:
-                narr_start = max(0, dialogue_index * time_per_dialogue)
+                narr_start = max(0.0, float(dialogue_index) * float(time_per_dialogue))
             else:
                 # Distribute evenly if no index
                 # Start at 1s, distribute over duration minus buffer
-                safe_duration = max(1.0, context_duration - 2.0)
-                interval = safe_duration / len(narrations[:6])
-                narr_start = 1.0 + (idx * interval)
+                safe_duration = max(1.0, float(context_duration) - 2.0)
+                interval = safe_duration / min(6, len(narrations))
+                narr_start = 1.0 + (float(idx) * interval)
             
-            narr_end = narr_start + narr_duration
+            narr_end = narr_start + float(narr_duration)
+            logger.info(f'overlaying narration: "{narr_text}" at t={narr_start:.2f}s')
             
             # Split lines for manual rendering
             narr_lines = narr_text_wrapped.split('\n')
@@ -482,14 +486,14 @@ class OverlayRenderer:
 
             # Timing Logic
             if dialogue_index is not None:
-                annot_start = max(0, dialogue_index * time_per_dialogue)
+                annot_start = max(0.0, float(dialogue_index) * float(time_per_dialogue))
             else:
                 # Distribute evenly if no index
-                safe_duration = max(1.0, context_duration - 2.0)
-                interval = safe_duration / len(vocab_annotations[:5])
-                annot_start = 1.0 + (idx * interval)
+                safe_duration = max(1.0, float(context_duration) - 2.0)
+                interval = safe_duration / min(5, len(vocab_annotations))
+                annot_start = 1.0 + (float(idx) * interval)
             
-            annot_end = annot_start + annot_duration
+            annot_end = annot_start + float(annot_duration)
 
             # Get rotating position (cycle through 4 positions)
             pos_idx = idx % len(ANNOTATION_POSITIONS)
@@ -498,8 +502,9 @@ class OverlayRenderer:
             # Escape text
             escaped_word = self.escape_drawtext_string(word)
             
-            # Wrap translation to prevent cutoff (max ~25 chars per line for annotations)
-            wrapped_translation = textwrap.fill(translation, width=25)
+            # Wrap translation dynamically to prevent cutoff 
+            max_vocab_width = int(25 * font_size * 0.6) # Approx equivalent text bounds
+            wrapped_translation = wrap_text_to_pixel_width(translation, target_font, font_size, max_vocab_width)
             escaped_translation = self.escape_drawtext_string(wrapped_translation)
 
             # Random color
@@ -622,14 +627,14 @@ class OverlayRenderer:
 
             # Timing Logic
             if dialogue_index is not None:
-                ea_start = max(0, dialogue_index * time_per_dialogue)
+                ea_start = max(0.0, float(dialogue_index) * float(time_per_dialogue))
             else:
                 # Distribute evenly
-                safe_duration = max(1.0, context_duration - 2.0)
-                interval = safe_duration / len(expr_annotations[:3])
-                ea_start = 1.0 + (idx * interval)
+                safe_duration = max(1.0, float(context_duration) - 2.0)
+                interval = safe_duration / min(4, len(exprs))
+                ea_start = 1.0 + (float(idx) * interval)
             
-            ea_end = ea_start + expr_annot_duration
+            ea_end = ea_start + float(expr_annot_duration)
 
             # Get rotating position (cycle through 4 positions)
             pos_idx = idx % len(ANNOTATION_POSITIONS)
@@ -637,8 +642,10 @@ class OverlayRenderer:
 
             escaped_expr = self.escape_drawtext_string(ea_expr)
             
-            # Wrap translation
-            wrapped_trans = textwrap.fill(ea_trans, width=25) if ea_trans else ""
+            # Wrap translation dynamically
+            max_expr_annot_width = int(25 * expr_annot_font_size * 0.6)
+            
+            wrapped_trans = wrap_text_to_pixel_width(ea_trans, target_font, expr_annot_font_size, max_expr_annot_width) if ea_trans else ""
             escaped_trans = self.escape_drawtext_string(wrapped_trans) if wrapped_trans else ""
 
             common_args = {
@@ -700,21 +707,19 @@ class OverlayRenderer:
         """
         import ffmpeg
 
-        # Get configurable chars per line from settings
-        chars_per_line = settings.get_expression_chars_per_line()
+        # Get configurable config settings
+        expression_font_size = settings.get_expression_font_size()
+        expression_y = settings.get_expression_y_position()
+        source_font = self.font_resolver.get_source_font("expression")
         
-        def wrap_text(text, width=None):
-            if width is None:
-                width = chars_per_line
-            return textwrap.fill(text, width=width)
+        from langflix.core.video.text_utils import wrap_text_to_pixel_width
 
         # Expression (source language)
         expression_text = self._clean_html(expression_text)
-        wrapped_expression = wrap_text(expression_text)
+        max_expr_width = settings.get_expression_max_width_px()
+        
+        wrapped_expression = wrap_text_to_pixel_width(expression_text, source_font, expression_font_size, max_expr_width)
         escaped_expression = self.escape_drawtext_string(wrapped_expression)
-
-        expression_y = settings.get_expression_y_position()
-        expression_font_size = settings.get_expression_font_size()
         expr_line_count = wrapped_expression.count('\n') + 1
         expr_height_px = expression_font_size * 1.2 * expr_line_count
 
@@ -742,9 +747,13 @@ class OverlayRenderer:
 
         # Translation (target language)
         translation_text = self._clean_html(translation_text)
-        # Use translation-specific chars_per_line
-        translation_chars_per_line = settings.get_translation_chars_per_line()
-        wrapped_translation = textwrap.fill(translation_text, width=translation_chars_per_line)
+        # Use translation-specific dynamic wrapping bounds
+        trans_font_size = settings.get_translation_font_size()
+        target_font = self.font_resolver.get_target_font("translation")
+        
+        max_trans_width = settings.get_translation_max_width_px()
+        
+        wrapped_translation = wrap_text_to_pixel_width(translation_text, target_font, trans_font_size, max_trans_width)
         escaped_translation = self.escape_drawtext_string(wrapped_translation)
 
         padding_between = 20

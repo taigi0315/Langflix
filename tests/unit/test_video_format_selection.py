@@ -16,6 +16,7 @@ class TestVideoFormatSelection(unittest.TestCase):
         """Set up test fixtures"""
         self.service = VideoPipelineService(
             language_code="ko",
+            source_language="en",
             output_dir="test_output"
         )
         # Create dummy video and subtitle files

@@ -160,8 +160,8 @@ video:
 dialogue_subtitle:
   # Font size for dialogue subtitles (in short-form videos)
   font_size: 36              # Increased from 28 for better readability
-  # Characters per line before wrapping
-  chars_per_line: 60         # Slightly reduced due to larger font
+  # Maximum width in pixels before dynamically wrapping text
+  max_width_px: 900          # Prevents text from overflowing a 1080px screen
   # Vertical margin from bottom (in pixels) - higher = further from bottom
   margin_v: 50               # Increased from 15 to move dialogue text higher
   # Source language color (the language being learned)
@@ -297,7 +297,7 @@ short_video:
     expression:
       font_size: 50              # Main expression font size (increased by 10 from 45)
       y_position: 1580           # Adjusted for new layout
-      chars_per_line: 40         # Characters per line before wrapping (increased from 28)
+      max_width_px: 900          # Maximum pixel width before wrapping
       text_color: 'yellow'
       border_width: 2
       border_color: 'black'
@@ -307,7 +307,7 @@ short_video:
       font_size: 50
       y_position: 1700           # Adjusted for new layout
       gap_from_expression: 60    # Gap between expression and translation
-      chars_per_line: 40         # Max characters per line before wrapping
+      max_width_px: 900          # Max pixel width before wrapping
       text_color: 'yellow'
       border_width: 2
       border_color: 'black'
@@ -356,7 +356,7 @@ short_video:
     title:
       font_size: 70                # Large font for emphasis
       y_position: 27               # Below logo, above keywords
-      chars_per_line: 25           # Max characters per line before wrapping
+      max_width_px: 900            # Max pixel width before dynamically scaling font or wrapping
       text_color: '#FF4444'        # Red for attention
       border_width: 3              # Thick border for visibility
       border_color: 'black'
@@ -366,7 +366,7 @@ short_video:
     narrations:
       font_size: 45                # Medium size
       y_position: 300              # Upper-middle area (below video top padding)
-      chars_per_line: 45           # Max characters per line before wrapping
+      max_width_px: 900            # Max pixel width before wrapping
       text_color: '#00FF00'        # Green for visibility
       background_color: '#000000'  # Black background
       background_opacity: 0.7      # Semi-transparent
@@ -419,10 +419,8 @@ short_video:
         similar_base_offset: 350      # Distinctly below translation
         similar_line_spacing: 50      # Space between similar expressions
       
-      # Line breaking for long text (max words before adding newline)
-      line_breaking:
-        expression_dialogue_max_words: 5
-        expression_translation_max_words: 6
+      # Dynamic line breaking for long text
+      max_width_px: 900
 
 # ============================================================================
 # Expression-Based Learning Configuration

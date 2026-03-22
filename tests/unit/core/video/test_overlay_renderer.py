@@ -148,7 +148,7 @@ class TestAddCatchyKeywords:
         mock_stream = Mock()
         mock_settings = Mock()
 
-        result = renderer.add_catchy_keywords(mock_stream, [], mock_settings)
+        result = renderer.add_catchy_keywords(mock_stream, [], mock_settings, target_width=1080)
 
         assert result is mock_stream
 
@@ -158,7 +158,7 @@ class TestAddCatchyKeywords:
         mock_stream = Mock()
         mock_settings = Mock()
 
-        result = renderer.add_catchy_keywords(mock_stream, None, mock_settings)
+        result = renderer.add_catchy_keywords(mock_stream, None, mock_settings, target_width=1080)
 
         assert result is mock_stream
 

@@ -11,6 +11,7 @@ import re
 
 from .models import ExpressionAnalysis
 from .subtitle_parser import parse_srt_file, parse_subtitle_file_by_extension
+from langflix.core.video.text_utils import wrap_text_to_pixel_width
 from langflix import settings
 from langflix.utils.expression_utils import get_expr_attr, clean_text_for_matching, is_non_speech_subtitle
 
@@ -547,7 +548,7 @@ class SubtitleProcessor:
         
         subtitle_to_dialogue_map = self._map_subtitles_to_dialogues(subtitles, source_dialogues)
         
-        subtitle_entry_num = 1
+        subtitle_entry_num: int = 1
         for i, subtitle in enumerate(subtitles):
             # Get absolute timestamps from subtitle
             start_time = self._time_to_timedelta(subtitle['start_time'])
@@ -579,11 +580,22 @@ class SubtitleProcessor:
             end_time_str = self._timedelta_to_srt_time(relative_end)
             srt_lines.append(f"{start_time_str} --> {end_time_str}")
             
+            from langflix import settings
+            font_size = settings.get_dialogue_subtitle_font_size()
+            max_subtitle_width = settings.get_dialogue_subtitle_max_width_px()
+            
+            from langflix.core.video.font_resolver import FontResolver
+            font_resolver = FontResolver(source_lang, target_lang)
+            source_font = font_resolver.get_source_font("dialogue")
+            target_font = font_resolver.get_target_font("dialogue")
+            
+            from langflix.core.video.text_utils import wrap_text_to_pixel_width
+            
             # --- Source text (TOP) ---
             # Use configured source color
             source_raw = subtitle['text']
-            # Wrap source text to 35 chars
-            source_wrapped = textwrap.fill(source_raw, width=35)
+            # Wrap source text using true pixel widths
+            source_wrapped = wrap_text_to_pixel_width(source_raw, source_font, font_size, max_subtitle_width)
             # Add color tag to EACH line to ensure it persists
             source_lines = [f"{{\\c{source_color_ass}}}{line}" for line in source_wrapped.split('\n')]
             
@@ -596,8 +608,8 @@ class SubtitleProcessor:
             from langflix.utils.expression_utils import clean_display_text
             translation_raw = clean_display_text(translation_raw)
             
-            # Wrap translation text to 35 chars
-            translation_wrapped = textwrap.fill(translation_raw, width=35)
+            # Wrap translation text dynamically
+            translation_wrapped = wrap_text_to_pixel_width(translation_raw, target_font, font_size, max_subtitle_width)
             # Add color tag to EACH line
             translation_lines = [f"{{\\c{target_color_ass}}}{line}" for line in translation_wrapped.split('\n')]
             
@@ -625,8 +637,8 @@ class SubtitleProcessor:
         clean_dialogues = [clean_text_for_matching(dialogue) for dialogue in dialogues]
         
         # Accumulate subtitle text to match against full dialogues
-        accumulated_text = ""
-        current_dialogue_idx = -1
+        accumulated_text: str = ""
+        current_dialogue_idx: int = -1
         
         # Pre-filter subtitles to ignore junk metadata
         # We process them but mark them as -1 immediately in the loop

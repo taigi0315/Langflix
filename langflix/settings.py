@@ -62,9 +62,9 @@ def get_dialogue_subtitle_target_color() -> str:
     return get_dialogue_subtitle_styling_config().get('target_color', '#FFFF00')
 
 
-def get_dialogue_subtitle_chars_per_line() -> int:
-    """Get max characters per line for dialogue subtitles (default: 45)"""
-    return get_dialogue_subtitle_styling_config().get('chars_per_line', 45)
+def get_dialogue_subtitle_max_width_px() -> int:
+    """Get max width in pixels for dialogue subtitles before wrapping (default: 900)"""
+    return get_dialogue_subtitle_styling_config().get('max_width_px', 900)
 
 
 def get_clip_extraction_config() -> Dict[str, Any]:
@@ -423,8 +423,8 @@ def get_show_name() -> str:
 
 
 def get_template_file() -> str:
-    """Get the template file name from configuration"""
-    return get_app_config().get('template_file', 'expression_analysis_prompt_v8.txt')
+    """Get the filename of the prompt template (default: expression_analysis_prompt.yaml)"""
+    return get_app_config().get('template_file', 'expression_analysis_prompt.yaml')
 
 
 def get_source_language_name() -> str:
@@ -813,9 +813,9 @@ def get_expression_border_color() -> str:
     return get_expression_text_config().get('border_color', 'black')
 
 
-def get_expression_chars_per_line() -> int:
-    """Get expression text chars per line before wrapping (default: 40)"""
-    return get_expression_text_config().get('chars_per_line', 40)
+def get_expression_max_width_px() -> int:
+    """Get expression text max width in pixels before wrapping (default: 900)"""
+    return get_expression_text_config().get('max_width_px', 900)
 
 
 def get_translation_text_config() -> Dict[str, Any]:
@@ -854,9 +854,9 @@ def get_translation_border_color() -> str:
     return get_translation_text_config().get('border_color', 'black')
 
 
-def get_translation_chars_per_line() -> int:
-    """Get max characters per line for translation before wrapping (default: 40)"""
-    return get_translation_text_config().get('chars_per_line', 40)
+def get_translation_max_width_px() -> int:
+    """Get max pixel width for translation before wrapping (default: 900)"""
+    return get_translation_text_config().get('max_width_px', 900)
 
 
 def get_dialogue_subtitle_config() -> Dict[str, Any]:
@@ -1049,9 +1049,9 @@ def get_viral_title_display_duration() -> float:
     return get_viral_title_config().get('display_duration', 0.0)
 
 
-def get_viral_title_chars_per_line() -> int:
-    """Get viral title max chars per line (default: 28 for portrait)"""
-    return get_viral_title_config().get('chars_per_line', 28)
+def get_viral_title_max_width_px() -> int:
+    """Get viral title max width in pixels (default: 900 for portrait)"""
+    return get_viral_title_config().get('max_width_px', 900)
 
 
 # ============================================================================
@@ -1104,9 +1104,9 @@ def get_narrations_duration() -> float:
     return get_narrations_config().get('duration', 3.0)
 
 
-def get_narrations_chars_per_line() -> int:
-    """Get max characters per line for narrations before wrapping (default: 30)"""
-    return get_narrations_config().get('chars_per_line', 30)
+def get_narrations_max_width_px() -> int:
+    """Get max width in pixels for narrations before wrapping (default: 900)"""
+    return get_narrations_config().get('max_width_px', 900)
 
 
 def get_narrations_type_color(narration_type: str) -> str:
@@ -1215,13 +1215,10 @@ def get_educational_slide_positions() -> Dict[str, int]:
     })
 
 
-def get_educational_slide_line_breaking() -> Dict[str, int]:
-    """Get line breaking configuration for educational slide"""
+def get_educational_slide_max_width_px() -> int:
+    """Get max pixel width for educational slide text tracking"""
     config = get_educational_slide_config()
-    return config.get('line_breaking', {
-        'expression_dialogue_max_words': 6,     # Reduced from 8
-        'expression_translation_max_words': 4   # Reduced from 6
-    })
+    return config.get('max_width_px', 900)
 
 
 def show_expression_highlight() -> bool:

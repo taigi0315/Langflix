@@ -93,6 +93,12 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None,
     # Load prompt template from file
     template = _load_prompt_template()
 
+    # Try to map source language name to code
+    source_language_code = "en" if source_language.lower() == "english" else "ko"
+    if source_language.lower() == "japanese": source_language_code = "ja"
+    elif source_language.lower() == "chinese": source_language_code = "zh"
+    elif source_language.lower() == "spanish": source_language_code = "es"
+
     # Format the template with variables - include all possible placeholders
     # This supports both timestamp-based and indexed formats
     try:
@@ -106,7 +112,9 @@ def get_prompt_for_chunk(subtitle_chunk: List[dict], language_level: str = None,
             target_language=target_language,
             source_language=source_language,
             show_name=show_name,
-            target_duration=target_duration
+            target_duration=target_duration,
+            target_language_code=language_code,
+            source_language_code=source_language_code
         )
     except KeyError as e:
         logger.error(f"Missing placeholder in prompt template: {e}")

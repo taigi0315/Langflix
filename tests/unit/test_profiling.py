@@ -19,7 +19,7 @@ class TestPipelineProfiler:
         """Test profiler initializes with default path"""
         profiler = PipelineProfiler()
         assert profiler.output_path is not None
-        assert profiler.output_path.parent.name == "profiles"
+        assert profiler.output_path.parent.name == "profiling"
         assert profiler.output_path.suffix == ".json"
         assert len(profiler.stages) == 0
     

@@ -19,7 +19,8 @@ from langflix.settings import get_expression_subtitle_styling
 from langflix.media.ffmpeg_utils import concat_filter_with_explicit_map, build_repeated_av, vstack_keep_width, log_media_params, repeat_av_demuxer, hstack_keep_height, get_duration_seconds, concat_demuxer_if_uniform, apply_final_audio_gain, apply_loudness_normalization
 from langflix.subtitles import overlay as subs_overlay
 from langflix.utils.filename_utils import sanitize_for_expression_filename
-from langflix.utils.expression_utils import get_expr_attr
+from langflix.utils.expression_utils import get_expr_attr, clean_display_text
+from langflix.core.video.text_utils import wrap_text_to_pixel_width
 from .error_handler import handle_error_decorator, ErrorContext, retry_on_error
 
 logger = logging.getLogger(__name__)
@@ -907,15 +908,19 @@ class VideoEditor:
         """
         try:
             # Get list of files to preserve
-            files_to_preserve = set()
+            files_to_preserve: set = set()
             if preserve_short_format:
                 files_to_preserve = set(self.short_format_temp_files)
                 # Move preserved files to permanent location
                 self._preserve_short_format_files(files_to_preserve)
+                if hasattr(self, 'temp_manager'):
+                    for file_path in files_to_preserve:
+                        if Path(file_path) in self.temp_manager.temp_files:
+                            self.temp_manager.temp_files.remove(Path(file_path))
             
             # Clean up files OWNED by this instance (safe cleanup)
             if hasattr(self, 'temp_manager') and hasattr(self, '_owned_temp_files'):
-                cleaned_count = 0
+                cleaned_count: int = 0
                 for file_path in self._owned_temp_files:
                     # Skip preserved files
                     if preserve_short_format and file_path in files_to_preserve:
@@ -946,7 +951,7 @@ class VideoEditor:
                 temp_files.extend(list(self.output_dir.glob("temp_*.txt")))
                 temp_files.extend(list(self.output_dir.glob("temp_*.wav")))
                 
-                cleaned_count = 0
+                cleaned_count: int = 0
                 for temp_file in temp_files:
                     if preserve_short_format and temp_file in files_to_preserve:
                         continue  # Skip preserved files
@@ -1316,27 +1321,14 @@ class VideoEditor:
                 similar_base_offset = positions.get('similar_base_offset', 250)
                 similar_line_spacing = positions.get('similar_line_spacing', 36)
                 
-                # Get line breaking config
-                line_breaking = settings.get_educational_slide_line_breaking()
-                dialogue_max_words = line_breaking.get('expression_dialogue_max_words', 8)
-                trans_max_words = line_breaking.get('expression_translation_max_words', 6)
-                
-                # Helper function to add line breaks for long text
-                def add_line_breaks(text: str, max_words: int) -> str:
-                    """Add newlines after every max_words words for FFmpeg drawtext"""
-                    if not text:
-                        return text
-                    words = text.split()
-                    if len(words) <= max_words:
-                        return text
-                    lines = []
-                    for i in range(0, len(words), max_words):
-                        lines.append(' '.join(words[i:i+max_words]))
-                    return '\n'.join(lines)
+                # Use dynamic text wrapping to prevent screen overflow (configurable)
+                from langflix.core.video.text_utils import wrap_text_to_pixel_width
+                max_slide_text_width = settings.get_educational_slide_max_width_px()
                 
                 # 1. Expression dialogue (full sentence) - Uses SOURCE font
                 if expression_dialogue and isinstance(expression_dialogue, str):
-                    dialogue_with_breaks = add_line_breaks(expression_dialogue, dialogue_max_words)
+                    source_font_path = self._get_font_path_for_use_case(self.source_language_code, "educational_slide")
+                    dialogue_with_breaks = wrap_text_to_pixel_width(expression_dialogue, source_font_path, dialogue_font_size, max_slide_text_width)
                     dialogue_with_breaks_escaped = escape_drawtext_string(dialogue_with_breaks)
                     drawtext_filters.append(
                         f"drawtext=text='{dialogue_with_breaks_escaped}':fontsize={dialogue_font_size}:fontcolor=white:"
@@ -1357,7 +1349,8 @@ class VideoEditor:
                 
                 # 3. Expression dialogue translation - Uses TARGET font
                 if expression_dialogue_trans and isinstance(expression_dialogue_trans, str):
-                    trans_with_breaks = add_line_breaks(expression_dialogue_trans, trans_max_words)
+                    target_font_path = self._get_font_path_for_use_case(self.language_code, "educational_slide")
+                    trans_with_breaks = wrap_text_to_pixel_width(expression_dialogue_trans, target_font_path, dialogue_trans_font_size, max_slide_text_width)
                     trans_with_breaks_escaped = escape_drawtext_string(trans_with_breaks)
                     drawtext_filters.append(
                         f"drawtext=text='{trans_with_breaks_escaped}':fontsize={dialogue_trans_font_size}:fontcolor=white:"
@@ -1980,7 +1973,7 @@ class VideoEditor:
             batch_videos = []
             current_batch_videos = []
             current_duration = 0.0
-            batch_number = 1
+            batch_number: int = 1
             
             for video_path, duration in short_format_videos:
                 # Check if adding this video would exceed target duration
