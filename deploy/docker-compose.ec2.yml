@@ -10,6 +10,7 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - LANGFLIX_LOG_LEVEL=INFO
+      - LANGFLIX_LOG_DIR=/data/logs
       - LANGFLIX_OUTPUT_DIR=/data/output
       - LANGFLIX_MEDIA_DIR=/data/assets/media
       - HOST=0.0.0.0
@@ -43,6 +44,7 @@ services:
       - LANGFLIX_API_BASE_URL=http://langflix-api:8000
       - LANGFLIX_UI_PORT=5000
       - LANGFLIX_LOG_LEVEL=INFO
+      - LANGFLIX_LOG_DIR=/data/logs
       - LANGFLIX_OUTPUT_DIR=/data/output
       - LANGFLIX_MEDIA_DIR=/data/assets/media
     ports:

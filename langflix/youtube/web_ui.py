@@ -2418,61 +2418,45 @@ class VideoManagementUI:
 
         @self.app.route('/api/jobs/queue/status')
         def get_queue_status():
-            """Get queue status and system logs via Redis"""
+            """Get queue status and system logs. Redis is optional — degrades gracefully."""
+            queue_length = 0
+            queue_jobs = []
+            current_job = None
+            processor_status = "idle"
+
+            # Try Redis for live queue info; skip silently if unavailable (EC2 has no Redis)
             try:
                 from langflix.core.redis_client import get_redis_job_manager
                 redis_manager = get_redis_job_manager()
-                
-                # Get queue status
+
                 queue_length = redis_manager.get_queue_length()
                 queue_job_ids = redis_manager.redis_client.lrange("jobs:queue", 0, -1)
-                queue_jobs = []
-                
-                # Fetch details for top 5 queued jobs
                 for job_id in queue_job_ids[:5]:
                     job_data = redis_manager.get_job(job_id)
                     if job_data:
                         queue_jobs.append(job_data)
-                
-                # Get currently processing job
+
                 current_job_id = redis_manager.get_currently_processing_job()
-                current_job = None
                 if current_job_id:
                     current_job = redis_manager.get_job(current_job_id)
-                elif queue_length == 0:
-                    # Fallback: If no official processing job and queue is empty,
-                    # check for "ghost" jobs (PROCESSING status but lock lost/zombie)
-                    # This happens if backend restarted during processing
-                    try:
-                        active_job_ids = redis_manager.redis_client.smembers("jobs:active")
-                        for job_id in active_job_ids:
-                            job_data = redis_manager.get_job(job_id)
-                            if job_data and job_data.get('status') == 'PROCESSING':
-                                current_job = job_data
-                                logger.info(f"detected ghost processing job: {job_id}")
-                                break
-                    except Exception as e:
-                        logger.warning(f"Failed to scan for ghost jobs: {e}")
 
-                # Determine processor status
                 processor_status = "processing" if current_job else ("idle" if queue_length == 0 else "waiting")
-                
-                # Read logs from project root
-                logs = self._read_recent_logs()
-                
-                return jsonify({
-                    "processor": processor_status,
-                    "queue": {
-                        "length": queue_length,
-                        "items": queue_jobs,
-                        "next_items_count": max(0, queue_length - len(queue_jobs))
-                    },
-                    "current_job": current_job,
-                    "logs": logs
-                })
-            except Exception as e:
-                logger.error(f"Error getting queue status: {e}")
-                return jsonify({"error": str(e)}), 500
+            except Exception:
+                # Redis not available — that's fine, just show logs
+                pass
+
+            logs = self._read_recent_logs()
+
+            return jsonify({
+                "processor": processor_status,
+                "queue": {
+                    "length": queue_length,
+                    "items": queue_jobs,
+                    "next_items_count": max(0, queue_length - len(queue_jobs))
+                },
+                "current_job": current_job,
+                "logs": logs
+            })
 
     def _read_recent_logs(self, n: int = 50) -> List[str]:
         """Read recent logs from langflix.log"""
