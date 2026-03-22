@@ -2533,52 +2533,56 @@ class VideoManagementUI:
     
         @self.app.route('/api/files/upload', methods=['POST'])
         def upload_media_files():
-            """Upload video and/or subtitle files to the output directory"""
+            """Upload video and/or subtitle files matching the expected structure:
+            /output/ShowName/ShowName.S01E01.mp4
+            /output/ShowName/Subs/ShowName.S01E01/5_English.srt
+            """
             try:
                 show_name = request.form.get('show_name', '').strip()
-                season = request.form.get('season', 'S01').strip()
-                episode = request.form.get('episode', 'E01').strip()
+                language = request.form.get('language', 'English').strip()
 
                 if not show_name:
                     return jsonify({"error": "Show name is required"}), 400
 
-                if not season.upper().startswith('S'):
-                    season = f"S{season.zfill(2)}"
-                if not episode.upper().startswith('E'):
-                    episode = f"E{episode.zfill(2)}"
+                show_dir = Path(self.output_dir) / show_name
+                show_dir.mkdir(parents=True, exist_ok=True)
 
-                season = season.upper()
-                episode = episode.upper()
-
-                # Create directory: /data/output/ShowName/S01/
-                target_dir = Path(self.output_dir) / show_name / season
-                target_dir.mkdir(parents=True, exist_ok=True)
-
-                base_name = f"{show_name}.{season}{episode}"
                 uploaded = []
 
+                # Save video file directly inside show folder
                 if 'video' in request.files and request.files['video'].filename:
                     video_file = request.files['video']
-                    ext = Path(secure_filename(video_file.filename)).suffix.lower()
-                    video_path = target_dir / f"{base_name}{ext}"
+                    filename = secure_filename(video_file.filename)
+                    video_path = show_dir / filename
                     video_file.save(str(video_path))
-                    uploaded.append(f"Video: {video_path.name}")
+                    uploaded.append(f"Video: {filename}")
 
+                # Save subtitle file inside Subs/episode_folder/language.srt
                 if 'subtitle' in request.files and request.files['subtitle'].filename:
                     sub_file = request.files['subtitle']
-                    ext = Path(secure_filename(sub_file.filename)).suffix.lower()
-                    sub_path = target_dir / f"{base_name}{ext}"
+                    sub_filename = secure_filename(sub_file.filename)
+
+                    # Determine episode folder name from associated video name or subtitle name
+                    episode_folder = request.form.get('episode_folder', '').strip()
+                    if not episode_folder:
+                        # Derive from subtitle filename (strip extension)
+                        episode_folder = Path(sub_filename).stem
+
+                    subs_dir = show_dir / 'Subs' / episode_folder
+                    subs_dir.mkdir(parents=True, exist_ok=True)
+
+                    sub_path = subs_dir / sub_filename
                     sub_file.save(str(sub_path))
-                    uploaded.append(f"Subtitle: {sub_path.name}")
+                    uploaded.append(f"Subtitle: Subs/{episode_folder}/{sub_filename}")
 
                 if not uploaded:
                     return jsonify({"error": "No files provided"}), 400
 
                 return jsonify({
                     "success": True,
-                    "directory": str(target_dir),
+                    "directory": str(show_dir),
                     "files": uploaded,
-                    "message": f"Uploaded to {show_name}/{season}/"
+                    "message": f"Uploaded to {show_name}/"
                 })
 
             except Exception as e:

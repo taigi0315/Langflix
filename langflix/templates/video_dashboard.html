@@ -99,18 +99,19 @@
           <span id="uploadToggleIcon" style="color: #a0aec0; font-size: 12px;">▼ Expand</span>
         </div>
         <div id="uploadPanel" style="display: none; padding: 20px;">
-          <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px;">
+          <!-- SCP tip for large files -->
+          <div style="background: #2d3748; border-left: 3px solid #6c63ff; border-radius: 6px; padding: 10px 14px; margin-bottom: 16px; font-size: 12px; color: #a0aec0;">
+            💡 <strong style="color:#e2e8f0">For large video files</strong>, use SCP from your Mac terminal — it's much faster:<br>
+            <code style="color:#6c63ff; display:block; margin-top:6px;">scp -r -i ~/.ssh/langflix-key.pem "/path/to/The.Glory" ec2-user@52.91.243.167:/data/output/</code>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
             <div>
-              <label style="color: #a0aec0; font-size: 12px; display: block; margin-bottom: 6px;">Show Name *</label>
-              <input id="uploadShowName" type="text" placeholder="e.g. Suits" style="width: 100%; padding: 8px 12px; background: #2d3748; border: 1px solid #4a5568; border-radius: 6px; color: #e2e8f0; font-size: 14px; box-sizing: border-box;" />
+              <label style="color: #a0aec0; font-size: 12px; display: block; margin-bottom: 6px;">Show Name * <span style="color:#4a5568">(folder name, e.g. The.Glory)</span></label>
+              <input id="uploadShowName" type="text" placeholder="e.g. The.Glory" style="width: 100%; padding: 8px 12px; background: #2d3748; border: 1px solid #4a5568; border-radius: 6px; color: #e2e8f0; font-size: 14px; box-sizing: border-box;" />
             </div>
             <div>
-              <label style="color: #a0aec0; font-size: 12px; display: block; margin-bottom: 6px;">Season</label>
-              <input id="uploadSeason" type="text" placeholder="e.g. S01" value="S01" style="width: 100%; padding: 8px 12px; background: #2d3748; border: 1px solid #4a5568; border-radius: 6px; color: #e2e8f0; font-size: 14px; box-sizing: border-box;" />
-            </div>
-            <div>
-              <label style="color: #a0aec0; font-size: 12px; display: block; margin-bottom: 6px;">Episode</label>
-              <input id="uploadEpisode" type="text" placeholder="e.g. E01" value="E01" style="width: 100%; padding: 8px 12px; background: #2d3748; border: 1px solid #4a5568; border-radius: 6px; color: #e2e8f0; font-size: 14px; box-sizing: border-box;" />
+              <label style="color: #a0aec0; font-size: 12px; display: block; margin-bottom: 6px;">Episode Folder <span style="color:#4a5568">(for subtitle Subs/ grouping)</span></label>
+              <input id="uploadEpisodeFolder" type="text" placeholder="e.g. The.Glory.S01E01.KOREAN.1080p" style="width: 100%; padding: 8px 12px; background: #2d3748; border: 1px solid #4a5568; border-radius: 6px; color: #e2e8f0; font-size: 14px; box-sizing: border-box;" />
             </div>
           </div>
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px;">
@@ -162,8 +163,7 @@
         }
         async function uploadFiles() {
           const showName = document.getElementById('uploadShowName').value.trim();
-          const season = document.getElementById('uploadSeason').value.trim();
-          const episode = document.getElementById('uploadEpisode').value.trim();
+          const episodeFolder = document.getElementById('uploadEpisodeFolder').value.trim();
           const videoFile = document.getElementById('videoFileInput').files[0];
           const subtitleFile = document.getElementById('subtitleFileInput').files[0];
           const status = document.getElementById('uploadStatus');
@@ -171,11 +171,10 @@
           if (!showName) { status.textContent = '⚠️ Show name is required'; status.style.color = '#e74c3c'; return; }
           if (!videoFile && !subtitleFile) { status.textContent = '⚠️ Please select at least one file'; status.style.color = '#e74c3c'; return; }
 
-          status.textContent = '⏳ Uploading...'; status.style.color = '#a0aec0';
+          status.textContent = '⏳ Uploading... (large files may take a while)'; status.style.color = '#a0aec0';
           const formData = new FormData();
           formData.append('show_name', showName);
-          formData.append('season', season);
-          formData.append('episode', episode);
+          formData.append('episode_folder', episodeFolder);
           if (videoFile) formData.append('video', videoFile);
           if (subtitleFile) formData.append('subtitle', subtitleFile);
 
