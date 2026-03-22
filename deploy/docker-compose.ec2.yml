@@ -1,5 +1,20 @@
 
 services:
+  # Redis (job queue + state storage)
+  redis:
+    image: redis:7-alpine
+    container_name: langflix-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - /data/redis:/data
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+          cpus: '0.25'
+
   # FastAPI Backend
   langflix-api:
     build:
@@ -13,6 +28,7 @@ services:
       - LANGFLIX_LOG_DIR=/data/logs
       - LANGFLIX_OUTPUT_DIR=/data/output
       - LANGFLIX_MEDIA_DIR=/data/assets/media
+      - REDIS_URL=redis://redis:6379
       - HOST=0.0.0.0
       - PORT=8000
     ports:
@@ -22,6 +38,8 @@ services:
       - /data:/data
       - ../config/config.yaml:/app/config/config.yaml:ro
       - ../.env:/app/.env:ro
+    depends_on:
+      - redis
     restart: unless-stopped
     deploy:
       resources:
@@ -47,6 +65,7 @@ services:
       - LANGFLIX_LOG_DIR=/data/logs
       - LANGFLIX_OUTPUT_DIR=/data/output
       - LANGFLIX_MEDIA_DIR=/data/assets/media
+      - REDIS_URL=redis://redis:6379
     ports:
       - "5000:5000"
     command: python -m langflix.youtube.web_ui
@@ -57,6 +76,7 @@ services:
       - /data/auth:/app/auth
     depends_on:
       - langflix-api
+      - redis
     restart: unless-stopped
     deploy:
       resources:
