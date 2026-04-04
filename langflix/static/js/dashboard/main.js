@@ -79,20 +79,24 @@ function setupAuth() {
             const result = await api.login();
             
             if (result && result.auth_url) {
-                // Open popup window
+                // Open popup window (web flow)
                 const width = 600;
                 const height = 700;
                 const left = (window.screen.width / 2) - (width / 2);
                 const top = (window.screen.height / 2) - (height / 2);
-                
+
                 window.open(
-                    result.auth_url, 
-                    'youtube_auth', 
+                    result.auth_url,
+                    'youtube_auth',
                     `width=${width},height=${height},top=${top},left=${left},scrollbars=yes,status=yes`
                 );
+            } else if (result && result.flow === 'desktop' && result.message) {
+                // Desktop flow succeeded (existing token loaded/refreshed)
+                await loadAccountInfo();
+                window.location.reload();
             } else {
-                console.error('Login returned no auth URL', result);
-                alert('Failed to start login process');
+                console.error('Login returned unexpected response', result);
+                alert('Failed to start login process: ' + (result && result.error ? result.error : 'Unknown error'));
             }
         } catch (e) {
             console.error('Login error:', e);

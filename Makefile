@@ -160,6 +160,27 @@ docker-shell-api:
 	docker exec -it langflix-api bash || \
 		docker exec -it $$(cd deploy && docker-compose -f docker-compose.truenas.yml ps -q langflix-api) bash
 
+# AWS Cloud Deployment Commands
+docker-build-aws:
+	@echo "🔨 Building LangFlix for AWS deployment..."
+	cd deploy && docker-compose -f docker-compose.ec2.yml build
+	@echo "✅ AWS Docker images built successfully!"
+
+docker-up-aws:
+	@echo "🐳 Starting LangFlix on AWS..."
+	cd deploy && docker-compose -f docker-compose.ec2.yml up -d
+	@echo "✅ AWS Services started successfully!"
+	@echo "🌐 API access: http://<EC2-IP>:8000"
+
+docker-down-aws:
+	@echo "🛑 Stopping LangFlix AWS services..."
+	cd deploy && docker-compose -f docker-compose.ec2.yml down
+	@echo "✅ AWS Services stopped successfully!"
+
+docker-logs-aws:
+	@echo "📋 Viewing LangFlix AWS logs..."
+	cd deploy && docker-compose -f docker-compose.ec2.yml logs -f
+
 docker-test:
 	@echo "🧪 Running tests in Docker..."
 	docker run --rm \
@@ -203,7 +224,7 @@ logs:
 
 deploy-zip:
 	@echo "📦 Creating deployment bundle..."
-	@python tools/create_deploy_bundle.py $(if $(OUTPUT),--output $(OUTPUT),) $(if $(INCLUDE_DOCS),--include-docs,) $(if $(INCLUDE_MEDIA),--include-media,)
+	@python3 tools/create_deploy_bundle.py $(if $(OUTPUT),--output $(OUTPUT),) $(if $(INCLUDE_DOCS),--include-docs,) $(if $(INCLUDE_MEDIA),--include-media,)
 	@echo "✅ Deployment bundle ready. Use 'OUTPUT=path.zip' to customize."
 
 status:

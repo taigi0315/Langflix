@@ -17,27 +17,27 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ScheduleConfig:
     """Configuration for scheduling preferences"""
-    daily_limits: Dict[str, int] = None  # {'final': 2, 'short': 5}
-    preferred_times: List[str] = None    # ['10:00', '14:00', '18:00']
+    daily_limits: Dict[str, int] = None  # {'final': 1, 'short': 1}
+    preferred_times: List[str] = None    # ['10:00']
     quota_limit: int = 10000
     warning_threshold: float = 80.0      # Percentage (0-100), representing 80%
     # New: slot-based scheduling controls
-    time_slots: List[str] = None         # e.g., ['00:00', '06:00', '12:00', '18:00']
-    slot_capacity: int = 3               # max videos per time slot
-    daily_max_total: int = 6             # hard cap per day across all types
-    
+    time_slots: List[str] = None         # e.g., ['10:00']
+    slot_capacity: int = 1               # max videos per time slot
+    daily_max_total: int = 1             # hard cap per day across all types
+
     def __post_init__(self):
         if self.daily_limits is None:
-            self.daily_limits = {'final': 2, 'short': 5}
+            self.daily_limits = {'final': 1, 'short': 1}
         if self.preferred_times is None:
-            self.preferred_times = ['10:00', '14:00', '18:00']
+            self.preferred_times = ['10:00']
         if self.time_slots is None:
-            # Default to 4 times per day with 6-hour intervals (0, 6, 12, 18)
-            self.time_slots = ['00:00', '06:00', '12:00', '18:00']
+            # Default to 1 upload every 18 hours
+            self.time_slots = ['10:00']
         if self.slot_capacity <= 0:
-            self.slot_capacity = 3  # Default: 3 videos per slot
+            self.slot_capacity = 1  # Default: 1 video per slot
         if self.daily_max_total <= 0:
-            self.daily_max_total = 6
+            self.daily_max_total = 1
         # Validate warning_threshold is in valid range (0-100)
         if not (0 <= self.warning_threshold <= 100):
             raise ValueError(f"warning_threshold must be between 0 and 100, got {self.warning_threshold}")

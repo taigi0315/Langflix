@@ -132,6 +132,15 @@ class YouTubeUploader:
                         content = f.read().strip()
                         if not content:
                             file_is_empty = True
+                except PermissionError as e:
+                    error_msg = (
+                        f"Permission denied reading credentials file: {self.credentials_file}\n"
+                        f"Error: {e}\n"
+                        "Fix: ensure the file is owned by UID 1000 and readable (chmod 644).\n"
+                        "On TrueNAS: check ZFS dataset ACL permissions for the auth directory."
+                    )
+                    logger.error(error_msg)
+                    raise PermissionError(error_msg) from e
                 except Exception as e:
                     logger.warning(f"Failed to read credentials file during empty check: {e}")
                     file_is_empty = True
@@ -197,6 +206,13 @@ class YouTubeUploader:
                         logger.info("Successfully refreshed YouTube OAuth token")
                     except Exception as e:
                         logger.warning(f"Token refresh failed: {e}, starting new OAuth flow")
+                        # Remove stale token file so next attempt starts fresh
+                        if os.path.exists(self.token_file):
+                            try:
+                                os.remove(self.token_file)
+                                logger.info(f"Removed stale token file: {self.token_file}")
+                            except Exception as remove_error:
+                                logger.warning(f"Could not remove stale token file: {remove_error}")
                         creds = None
                 else:
                     flow = InstalledAppFlow.from_client_secrets_file(self.credentials_file, SCOPES)

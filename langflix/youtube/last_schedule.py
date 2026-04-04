@@ -12,20 +12,20 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class LastScheduleConfig:
-    time_slots: List[str] = None           # e.g. ['00:00','06:00','12:00','18:00']
-    slot_capacity: int = 3
-    daily_max_total: int = 6
+    time_slots: List[str] = None           # e.g. ['10:00']
+    slot_capacity: int = 1
+    daily_max_total: int = 1
     window_days: int = 14
     cache_file: str = ".cache/last_scheduled_map.json"
 
     def __post_init__(self):
         if self.time_slots is None:
-            # Default to 4 times per day with 6-hour intervals (0, 6, 12, 18)
-            self.time_slots = ['00:00', '06:00', '12:00', '18:00']
+            # Default to 1 upload every 18 hours
+            self.time_slots = ['10:00']
         if self.slot_capacity <= 0:
-            self.slot_capacity = 3  # 3 videos per slot
+            self.slot_capacity = 1  # 1 video per slot
         if self.daily_max_total <= 0:
-            self.daily_max_total = 6
+            self.daily_max_total = 1
         if self.window_days <= 0:
             self.window_days = 14
 

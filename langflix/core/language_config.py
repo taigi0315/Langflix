@@ -92,10 +92,17 @@ class LanguageConfig:
         """
         import logging
         logger = logging.getLogger(__name__)
-        
+
+        try:
+            from langflix.config.font_utils import normalize_language_code
+            orig_language_code = language_code
+            language_code = normalize_language_code(language_code) or language_code
+        except Exception:
+            orig_language_code = language_code
+
         if language_code not in cls.LANGUAGE_CONFIGS:
             # Log warning when falling back to Korean
-            logger.warning(f"⚠️ Language '{language_code}' not supported! Falling back to Korean. "
+            logger.warning(f"⚠️ Language '{orig_language_code}' (normalized: '{language_code}') not supported! Falling back to Korean. "
                           f"Supported languages: {list(cls.LANGUAGE_CONFIGS.keys())}")
             language_code = 'ko'
         else:
@@ -145,8 +152,9 @@ class LanguageConfig:
                 if fallback_path.exists():
                     return str(fallback_path)
         
-        # Final fallback to system default
-        return '/System/Library/Fonts/Arial.ttf'
+        # Final fallback to platform default
+        from langflix.config.font_utils import get_platform_default_font
+        return get_platform_default_font()
     
     @classmethod
     def get_prompt_language(cls, language_code: str) -> str:

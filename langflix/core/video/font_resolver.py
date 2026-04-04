@@ -98,6 +98,12 @@ class FontResolver:
         # Use default language if not provided
         lang = language_code or self.default_language_code
 
+        try:
+            from langflix.config.font_utils import normalize_language_code
+            lang = normalize_language_code(lang)
+        except Exception:
+            pass
+
         # Check cache first
         cache_key = f"{lang}:{use_case}"
         cached = self._get_cached_font(cache_key)

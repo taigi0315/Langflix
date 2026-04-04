@@ -652,7 +652,8 @@ async def get_queue_status() -> Dict[str, Any]:
 def read_recent_logs(n: int = 50) -> List[str]:
     """Read shell-style recent logs from the log file."""
     try:
-        log_path = project_root / "langflix.log"
+        log_dir = os.getenv('LANGFLIX_LOG_DIR', str(project_root))
+        log_path = Path(log_dir) / "langflix.log"
         if not log_path.exists():
             return [f"Log file not found at {log_path}"]
             

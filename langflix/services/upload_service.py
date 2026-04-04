@@ -1,4 +1,6 @@
 import logging
+import random
+import time
 from pathlib import Path
 from typing import List, Dict, Optional, Tuple
 
@@ -46,25 +48,31 @@ class UploadService:
                 logger.warning("No combined videos found for upload.")
                 return
 
-            for lang, video_path in videos_to_upload:
+            for i, (lang, video_path) in enumerate(videos_to_upload):
                 try:
                     video_metadata = video_manager._extract_video_metadata(video_path)
                     if not video_metadata:
                          continue
-                         
+
                     yt_metadata = metadata_gen.generate_metadata(
                         video_metadata,
                         target_language=lang,
-                        privacy_status="private" 
+                        privacy_status="private"
                     )
-                    
+
                     logger.info(f"Uploading {video_path.name} to YouTube ({lang})...")
                     result = uploader.upload_video(video_path, yt_metadata)
-                    
+
                     if result.success:
                          logger.info(f"✅ Upload successful! Video ID: {result.video_id}")
                     else:
                          logger.error(f"❌ Upload failed: {result.error_message}")
+
+                    # Random delay between uploads (skip after last video)
+                    if i < len(videos_to_upload) - 1:
+                        delay = random.uniform(3, 10)
+                        logger.info(f"⏳ Waiting {delay:.1f}s before next upload...")
+                        time.sleep(delay)
                 except Exception as e:
                      logger.error(f"Error uploading video {video_path}: {e}")
                      

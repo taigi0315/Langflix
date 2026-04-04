@@ -49,12 +49,17 @@ RUN pip install --no-cache-dir -r requirements.txt
 # ----------------------------------------------------------------------------
 FROM python:3.11-slim AS runtime
 
-# Install runtime dependencies and Korean fonts
+# Install runtime dependencies, universal Noto fonts, and gosu for entrypoint privilege drop
+# fonts-noto-core: Latin, Cyrillic, Greek, Arabic, Thai, Hindi, etc.
+# fonts-noto-cjk: Korean, Japanese, Chinese
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     curl \
+    gosu \
+    fonts-noto-core \
     fonts-noto-cjk \
     fonts-noto-cjk-extra \
+    fonts-noto-extra \
     fontconfig \
     && rm -rf /var/lib/apt/lists/* \
     && fc-cache -fv
@@ -65,14 +70,17 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Create non-root user for security
 RUN useradd -m -u 1000 -s /bin/bash langflix && \
-    mkdir -p /app /data/output /data/logs /data/assets /app/cache && \
+    mkdir -p /app /data/output /data/logs /data/assets /app/cache /app/auth && \
     chown -R langflix:langflix /app /data
 
 WORKDIR /app
-USER langflix
 
 # Copy application code
 COPY --chown=langflix:langflix . .
+
+# Copy entrypoint script (runs as root to fix permissions, then drops to langflix)
+COPY --chmod=755 entrypoint.sh /entrypoint.sh
+ENTRYPOINT ["/entrypoint.sh"]
 
 # Expose ports
 EXPOSE 8000 5000

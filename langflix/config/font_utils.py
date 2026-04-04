@@ -1,4 +1,8 @@
-"""Font utility functions for platform-specific font detection."""
+"""Font utility functions for platform-specific font detection.
+
+Uses Noto Sans font family as the universal default to prevent tofu (□□□) rendering.
+Noto = "No Tofu" - designed by Google to cover all Unicode characters.
+"""
 
 import os
 import platform
@@ -7,275 +11,203 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
+# Noto Sans font paths on Linux/Docker (installed via apt)
+NOTO_SANS_CJK = "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
+NOTO_SANS_REGULAR = "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"
+NOTO_SANS_BOLD = "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf"
+
+# CJK language codes
+CJK_LANGUAGES = {'ko', 'ja', 'zh', 'korean', 'japanese', 'chinese'}
+
+def normalize_language_code(language_str: Optional[str]) -> Optional[str]:
+    """Map full language names to 2-letter ISO codes"""
+    if not language_str:
+        return None
+    lang = language_str.lower().strip()
+    mapping = {
+        'korean': 'ko', 'japanese': 'ja', 'chinese': 'zh',
+        'spanish': 'es', 'english': 'en', 'french': 'fr', 'german': 'de'
+    }
+    return mapping.get(lang, lang)
+
+def check_universal_font() -> str:
+    """Check if the user dropped a universal.ttf font in assets/fonts/"""
+    try:
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        for filename in ["universal.ttf", "universal.ttc"]:
+            universal_path = os.path.join(project_root, "assets", "fonts", filename)
+            if os.path.exists(universal_path):
+                return universal_path
+    except Exception:
+        pass
+    return ""
+
+
+def _find_first_existing(*paths: str) -> str:
+    """Return the first path that exists, or empty string."""
+    for p in paths:
+        if p and os.path.exists(p):
+            return p
+    return ""
+
 
 def get_platform_default_font() -> str:
-    """
-    Get appropriate default font based on platform.
-    
-    Returns:
-        str: Path to platform-specific default font, or empty string if not found
-    """
+    """Get appropriate default font based on platform."""
     system = platform.system()
-    
-    if system == "Darwin":  # macOS
-        font_path = "/System/Library/Fonts/AppleSDGothicNeo.ttc"
-        if os.path.exists(font_path):
-            logger.debug(f"Using macOS default font: {font_path}")
-            return font_path
-        logger.warning("macOS default font not found")
-        return ""
-        
+
+    # First check for universal font
+    univ_font = check_universal_font()
+    if univ_font:
+        return univ_font
+
+    if system == "Darwin":
+        return _find_first_existing(
+            "/Library/Fonts/Arial Unicode.ttf",
+            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+            "/System/Library/Fonts/AppleSDGothicNeo.ttc",
+        )
     elif system == "Linux":
-        # Try common Korean fonts on Linux
-        linux_fonts = [
-            "/usr/share/fonts/truetype/nanum/NanumGothic.ttc",
+        return _find_first_existing(
+            NOTO_SANS_CJK,
+            NOTO_SANS_REGULAR,
             "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"
-        ]
-        for font_path in linux_fonts:
-            if os.path.exists(font_path):
-                logger.debug(f"Using Linux font: {font_path}")
-                return font_path
-        logger.warning("No suitable Linux fonts found, falling back to system default")
-        return ""
-        
+        )
     elif system == "Windows":
-        # Try common Korean fonts on Windows
-        windows_fonts = [
-            "C:/Windows/Fonts/malgun.ttf",  # Malgun Gothic
-            "C:/Windows/Fonts/arial.ttf",   # Arial fallback
-        ]
-        for font_path in windows_fonts:
-            if os.path.exists(font_path):
-                logger.debug(f"Using Windows font: {font_path}")
-                return font_path
-        logger.warning("No suitable Windows fonts found, falling back to system default")
-        return ""
-        
-    else:
-        logger.warning(f"Unknown platform: {system}, cannot detect default font")
-        return ""
+        return _find_first_existing(
+            "C:/Windows/Fonts/arial.ttf",
+            "C:/Windows/Fonts/malgun.ttf",
+        )
+    return ""
+
+
+def _get_noto_font_for_language(language_code: Optional[str], bold: bool = False) -> str:
+    """Get appropriate Noto Sans font for a language on Linux/Docker.
+    Noto Sans CJK actually includes Latin-1 and Latin-2, meaning it covers Spanish/English.
+    Using it as the default prevents missing character boxes for mixed text."""
+    # We prioritize CJK since it inherently contains comprehensive Latin support!
+    if bold:
+        return _find_first_existing(NOTO_SANS_BOLD, NOTO_SANS_CJK, NOTO_SANS_REGULAR)
+    return _find_first_existing(NOTO_SANS_CJK, NOTO_SANS_REGULAR)
 
 
 def get_font_file_for_language(language_code: Optional[str] = None, use_case: str = "default") -> str:
     """
-    Get font file path for the given language or default.
-    Prioritizes TTF/TTC files that work with FFmpeg drawtext filter.
-    
-    Args:
-        language_code: Optional language code (e.g., 'ko', 'ja', 'zh', 'es')
-        use_case: Specific use case ('default', 'dialogue', 'keywords', 'expression', 'translation', 'vocabulary', 'educational_slide', 'title')
-        
-    Returns:
-        str: Path to appropriate font file
+    Get font file path for the given language.
+
+    Resolution order:
+    1. Per-language config from settings (if font file exists)
+    2. Platform-specific universal font (Noto Sans on Linux, Arial Unicode on macOS)
+    3. Platform default fallback
     """
-    # Import here to avoid circular imports
+    system = platform.system()
+    is_bold_use_case = use_case in ("title", "educational_slide", "keywords")
+    language_code = normalize_language_code(language_code)
+
+    # 0. Check custom universal super-font
+    univ_font = check_universal_font()
+    if univ_font:
+        return univ_font
+        
+    # Try configured fonts first (from default.yaml)
     try:
-        from ..core.language_config import LanguageConfig
         from langflix import settings
-        
-        # Priority 0: For target languages that need to display Latin characters with accents
-        # (Spanish é, ó, French ç, etc.) we need a font with good Unicode/Latin Extended coverage.
-        # CJK fonts (like the Korean 1HoonGrimdonghwa) don't support these characters well.
-        latin_languages = ['es', 'en', 'fr', 'de', 'pt', 'it', 'nl', 'pl', 'ru', 'vi', 'id', 'tr']
-        if language_code in latin_languages and platform.system() == "Darwin":
-             try:
-                # Priority: Arial Unicode > Arial > Helvetica > AppleSDGothicNeo
-                # Use TTF files when possible (more reliable with FFmpeg drawtext than TTC)
-                latin_fonts = [
-                    "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",  # Best Unicode coverage
-                    "/System/Library/Fonts/Supplemental/Arial.ttf",  # Standard Arial with good Latin support
-                    "/System/Library/Fonts/Helvetica.ttc",  # Helvetica as fallback
-                ]
-                for safe_font in latin_fonts:
-                    if os.path.exists(safe_font):
-                        logger.debug(f"Using {safe_font} for {language_code} (Latin characters)")
-                        return safe_font
-             except Exception:
-                 pass
-        
-        # Retrieve per-language font configuration
-        try:
-            language_fonts_config = settings.get_language_fonts_config()
-            
-            # Helper to check and resolve font path
-            def resolve_font(config_section, key):
-                if not config_section or key not in config_section:
-                    return None
-                
-                font_rel_path = config_section[key]
-                # If path contains 'assets/fonts', verify it relative to project root
-                if "assets/fonts" in font_rel_path:
-                    # Construct absolute path: current_file -> config -> langflix -> ROOT
-                    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-                    abs_path = os.path.join(project_root, font_rel_path)
-                    if os.path.exists(abs_path):
-                        return abs_path
-                    else:
-                        logger.warning(f"Configured font path not found: {abs_path}")
-                
-                # If just a direct path, check it
-                if os.path.exists(font_rel_path):
-                    return font_rel_path
+        language_fonts_config = settings.get_language_fonts_config()
+
+        def resolve_font(config_section, key):
+            if not config_section or key not in config_section:
                 return None
+            font_rel_path = config_section[key]
+            if "assets/fonts" in font_rel_path:
+                project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                abs_path = os.path.join(project_root, font_rel_path)
+                if os.path.exists(abs_path):
+                    return abs_path
+            if os.path.exists(font_rel_path):
+                return font_rel_path
+            return None
 
-            # 1. Lookup: language_code -> use_case
-            if language_code and language_code in language_fonts_config:
-                font = resolve_font(language_fonts_config[language_code], use_case)
-                if font: 
-                    logger.debug(f"Using configured font for {language_code}/{use_case}: {font}")
-                    return font
+        # language -> use_case -> language -> default -> global -> use_case -> global -> default
+        if language_code and language_code in language_fonts_config:
+            font = resolve_font(language_fonts_config[language_code], use_case)
+            if font:
+                return font
+            font = resolve_font(language_fonts_config[language_code], "default")
+            if font:
+                return font
+        if "default" in language_fonts_config:
+            font = resolve_font(language_fonts_config["default"], use_case)
+            if font:
+                return font
+            font = resolve_font(language_fonts_config["default"], "default")
+            if font:
+                return font
+    except Exception as e:
+        logger.debug(f"Config font lookup failed: {e}")
 
-                # 2. Lookup: language_code -> default
-                font = resolve_font(language_fonts_config[language_code], "default")
-                if font: 
-                    logger.debug(f"Using configured default font for {language_code}: {font}")
-                    return font
+    # Platform-specific universal fonts
+    if system == "Linux":
+        font = _get_noto_font_for_language(language_code, bold=is_bold_use_case)
+        if font:
+            return font
+    elif system == "Darwin":
+        # macOS: Arial Unicode supports virtually everything
+        font = _find_first_existing(
+            "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+            "/System/Library/Fonts/AppleSDGothicNeo.ttc",
+            "/System/Library/Fonts/Helvetica.ttc",
+        )
+        if font:
+            return font
 
-            # 3. Lookup: default -> use_case
-            if "default" in language_fonts_config:
-                font = resolve_font(language_fonts_config["default"], use_case)
-                if font: 
-                    logger.debug(f"Using global default font for {use_case}: {font}")
-                    return font
-            
-            # 4. Lookup: default -> default
-            if "default" in language_fonts_config:
-                font = resolve_font(language_fonts_config["default"], "default")
-                if font: return font
-
-        except Exception as e:
-            logger.warning(f"Error accessing per-language font config: {e}")
-
-        # Fallback to existing logic if config lookup fails
-        # Priority 1: Check if educational slide font is configured and available (Maplestory Bold)
-        # This is the "safe" font that supports both Source (Korean) and Target (English)
-        try:
-            edu_font = settings.get_educational_slide_font_path()
-            if edu_font and os.path.exists(edu_font):
-                logger.debug(f"Using configured educational font as priority: {edu_font}")
-                return edu_font
-        except Exception as e:
-            logger.warning(f"Error checking educational font: {e}")
-        
-        # If language code is provided, try to get language-specific font
-        if language_code:
-            try:
-                font_path = LanguageConfig.get_font_path(language_code)
-                if font_path and os.path.exists(font_path):
-                    logger.info(f"Using language-specific font for {language_code}: {font_path}")
-                    return font_path
-                else:
-                    logger.warning(f"Language-specific font not found for {language_code}, trying platform-specific fonts")
-                    
-                    # For Linux/Docker, try to find CJK fonts directly
-                    if platform.system() == "Linux":
-                        if language_code in ['ko', 'ja', 'zh']:
-                            # Try Noto Sans CJK (installed in Dockerfile)
-                            cjk_fonts = [
-                                "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-                                "/usr/share/fonts/truetype/nanum/NanumGothic.ttc",
-                                "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-                            ]
-                            for font_path in cjk_fonts:
-                                if os.path.exists(font_path):
-                                    logger.info(f"Using Linux CJK font for {language_code}: {font_path}")
-                                    return font_path
-                    
-                    # Special handling for Spanish - try recommended fonts
-                    if language_code == 'es':
-                        spanish_fonts = LanguageConfig.get_spanish_font_recommendations()
-                        if spanish_fonts:
-                            logger.info(f"Using Spanish-compatible font: {spanish_fonts[0]}")
-                            return spanish_fonts[0]
-                        
-            except Exception as e:
-                logger.warning(f"Error getting font for language {language_code}: {e}")
-    except ImportError:
-        logger.warning("LanguageConfig not available, using platform default")
-    
-    # Fallback to platform default
     return get_platform_default_font()
 
+
 def validate_spanish_font_support() -> dict:
-    """
-    Validate Spanish font support on the current system.
-    
-    Returns:
-        Dictionary with validation results
-    """
+    """Validate Spanish font support on the current system."""
     try:
         from ..core.language_config import LanguageConfig
         return LanguageConfig.validate_font_for_language('es')
     except ImportError:
-        return {
-            'validation_status': 'error',
-            'error': 'LanguageConfig not available'
-        }
+        return {'validation_status': 'error', 'error': 'LanguageConfig not available'}
 
 
 def get_fonts_dir() -> str:
-    """
-    Get platform-specific fonts directory for FFmpeg subtitles filter.
-    
-    Returns:
-        str: Path to fonts directory for the current platform
-    """
+    """Get platform-specific fonts directory for FFmpeg subtitles filter."""
     system = platform.system()
-    
-    if system == "Darwin":  # macOS
+    if system == "Darwin":
         return "/System/Library/Fonts"
     elif system == "Linux":
         return "/usr/share/fonts"
     elif system == "Windows":
         return "C:/Windows/Fonts"
-    else:
-        # Fallback to Linux path (most common for Docker)
-        logger.warning(f"Unknown platform: {system}, using Linux fonts directory")
-        return "/usr/share/fonts"
+    return "/usr/share/fonts"
 
 
 def get_font_name_for_ffmpeg(font_path: Optional[str] = None, language_code: Optional[str] = None) -> str:
-    """
-    Get font name for FFmpeg FontName parameter.
-    
-    Args:
-        font_path: Optional font file path
-        language_code: Optional language code (e.g., 'ko', 'ja', 'zh')
-        
-    Returns:
-        str: Font name for FFmpeg
-    """
-    system = platform.system()
-    
-    # If font path is provided, try to determine font name from path
+    """Get font name for FFmpeg FontName parameter."""
     if font_path:
-        if 'AppleSDGothicNeo' in font_path or 'Apple SD Gothic Neo' in font_path:
-            return "Apple SD Gothic Neo"
-        elif 'NanumGothic' in font_path or 'Nanum Gothic' in font_path:
-            return "NanumGothic"
-        elif 'NotoSansCJK' in font_path or 'Noto Sans CJK' in font_path:
-            return "Noto Sans CJK"
-        elif 'Hiragino' in font_path:
-            return "Hiragino Sans"
-        elif 'HelveticaNeue' in font_path:
-            return "Helvetica Neue"
-        elif 'malgun' in font_path.lower():
-            return "Malgun Gothic"
-    
-    # Platform-specific defaults
-    if system == "Darwin":  # macOS
-        return "Apple SD Gothic Neo"
-    elif system == "Linux":
-        # Check if Noto or Nanum fonts are available
-        if os.path.exists("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc"):
-            return "Noto Sans CJK"
-        elif os.path.exists("/usr/share/fonts/truetype/nanum/NanumGothic.ttc"):
-            return "NanumGothic"
-        else:
-            return "DejaVu Sans"  # Fallback
-    elif system == "Windows":
-        return "Malgun Gothic"
-    else:
-        return "Arial"  # Ultimate fallback
+        name_map = {
+            'NotoSansCJK': 'Noto Sans CJK',
+            'NotoSans': 'Noto Sans',
+            'AppleSDGothicNeo': 'Apple SD Gothic Neo',
+            'NanumGothic': 'NanumGothic',
+            'Hiragino': 'Hiragino Sans',
+            'HelveticaNeue': 'Helvetica Neue',
+            'Arial Unicode': 'Arial Unicode MS',
+            'Arial': 'Arial',
+            'DejaVuSans': 'DejaVu Sans',
+        }
+        for key, name in name_map.items():
+            if key in font_path:
+                return name
 
+    system = platform.system()
+    if system == "Darwin":
+        return "Arial Unicode MS"
+    elif system == "Linux":
+        if language_code in CJK_LANGUAGES:
+            return "Noto Sans CJK"
+        return "Noto Sans"
+    elif system == "Windows":
+        return "Arial"
+    return "Arial"

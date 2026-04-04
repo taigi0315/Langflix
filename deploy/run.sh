@@ -127,6 +127,11 @@ if [ ! -d "$LOGS_DIR" ]; then
     sudo chown -R 1000:1000 "$LOGS_DIR" 2>/dev/null || true
     sudo chmod -R 777 "$LOGS_DIR" 2>/dev/null || true
 fi
+# Ensure existing log files are accessible (fix permission denied on langflix.log)
+if [ -d "$LOGS_DIR" ]; then
+    sudo chmod -R 666 "$LOGS_DIR"/*.log 2>/dev/null || true
+    sudo chmod 777 "$LOGS_DIR" 2>/dev/null || true
+fi
 
 if [ ! -d "$LOGS_DIR" ]; then
     echo -e "${RED}❌ Critical Error: Failed to create logs directory at $LOGS_DIR${NC}"
@@ -256,7 +261,8 @@ if [ -f "$CREDENTIALS_FILE" ]; then
     if sudo chmod 644 "$CREDENTIALS_FILE" 2>/dev/null; then
         echo "   권한 설정 완료 (644)"
     else
-        echo -e "${YELLOW}⚠️  chmod 실패 (ZFS ACL 사용 중일 수 있음)${NC}"
+        echo -e "${YELLOW}⚠️  chmod 644 실패, trying world-readable...${NC}"
+        sudo chmod a+r "$CREDENTIALS_FILE" 2>/dev/null || true
     fi
     # 권한 확인
     PERMS=$(ls -l "$CREDENTIALS_FILE" 2>/dev/null | awk '{print $1, $3, $4}' || echo "권한 확인 불가")
@@ -286,11 +292,12 @@ if [ -f "$TOKEN_FILE" ]; then
     else
         echo -e "${YELLOW}⚠️  소유권 설정 실패${NC}"
     fi
-    # 권한 설정 (600 = read/write, 더 안전)
-    if sudo chmod 600 "$TOKEN_FILE" 2>/dev/null; then
-        echo "   권한 설정 완료 (600)"
+    # 권한 설정 (660 = read/write for owner and group)
+    if sudo chmod 660 "$TOKEN_FILE" 2>/dev/null; then
+        echo "   권한 설정 완료 (660)"
     else
-        echo -e "${YELLOW}⚠️  권한 설정 실패${NC}"
+        echo -e "${YELLOW}⚠️  chmod 660 실패, trying broader permissions...${NC}"
+        sudo chmod 666 "$TOKEN_FILE" 2>/dev/null || true
     fi
     # 권한 확인
     PERMS=$(ls -l "$TOKEN_FILE" 2>/dev/null | awk '{print $1, $3, $4}')
@@ -386,8 +393,18 @@ if [ -f "$CONFIG_FILE" ]; then
          echo "   해결: sudo chmod 644 $CONFIG_FILE"
     fi
 else
-    echo -e "${RED}❌ 오류: config.yaml 파일을 찾을 수 없습니다${NC}"
-    echo "   경로: $CONFIG_FILE"
+    CONFIG_EXAMPLE="$PROJECT_ROOT/config/config.example.yaml"
+    if [ -f "$CONFIG_EXAMPLE" ]; then
+        echo -e "${YELLOW}⚠️  config.yaml 없음 - config.example.yaml 에서 자동 생성 중...${NC}"
+        cp "$CONFIG_EXAMPLE" "$CONFIG_FILE"
+        sudo chown 1000:1000 "$CONFIG_FILE" 2>/dev/null || true
+        sudo chmod 644 "$CONFIG_FILE" 2>/dev/null || true
+        echo -e "${GREEN}✅ config.yaml 생성 완료${NC}"
+    else
+        echo -e "${RED}❌ 오류: config.yaml 파일을 찾을 수 없습니다${NC}"
+        echo "   경로: $CONFIG_FILE"
+        exit 1
+    fi
 fi
 
 # Docker Compose 파일 확인

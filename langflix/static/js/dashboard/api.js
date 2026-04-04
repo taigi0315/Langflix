@@ -102,7 +102,7 @@ export const api = {
         const response = await fetch('/api/youtube/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ use_web_flow: true })
+            body: JSON.stringify({ use_web_flow: false })
         });
         return await response.json();
     },
